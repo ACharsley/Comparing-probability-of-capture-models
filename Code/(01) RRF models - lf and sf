@@ -1,0 +1,194 @@
+
+####  PACKAGES
+library(RRF) #RRF pacakage
+library(ROCR) #auc function
+library(cvAUC) #auc CI's
+library(sperrorest) #k-means spatial partitioning function
+
+
+rm(list=ls())
+
+## Set paths
+data_path <- file.path(getwd(), "Data")
+
+output_path <- file.path(getwd(), "Output")
+RRF_path <- file.path(output_path, "RRF")
+dir.create(RRF_path, showWarnings = F)
+
+
+## Load data
+load(file.path(data_path, "My_NZFFD.REC2.Diad.EF.Rdata"))
+
+#Covariate names
+diad.preds <- read_xlsx(file.path(data_path, "Predictor Table_edited.xlsx"))
+Xvars <- diad.preds$Abbreviation
+rm(diad.preds) #remove as we no longer need this
+Xvars <- as.character(Xvars) #set as a character
+
+Xvars <- Xvars[!(Xvars=="REC1_rclabel")]
+
+#fishmeth isn't needed as a covariate as we are only using EF data
+
+############################# Run model ###############################################
+
+#RRF functions
+GetRRFModel <- function(y, myExplanatoryFrame, x, Classification = F, ...) {
+  if(Classification) { #when using RRF as a classifier
+    myExplanatoryFrame[[y]] <- factor(myExplanatoryFrame[[y]]) #set y as factor
+    levels(myExplanatoryFrame[[y]]) <- c("F", "T") #set levels
+  }
+  myOut <- RRF(y = myExplanatoryFrame[, y], x = myExplanatoryFrame[ , x], ...) #run RRF model
+  return(myOut) #return RRF model
+}
+
+################################################################################################
+#Longfin eel Model
+set.seed(22)
+ModelListMMQ.RRF.angdie <- lapply("angdie", GetRRFModel, myExplanatoryFrame = NZFFD.REC2.Diad.EF, x = Xvars, 
+                                  Classification = T, ntree=1000) #run rrf model with 1000 Regression trees
+
+angdie_vars_RRF = Xvars[ModelListMMQ.RRF.angdie[[1]]$feaSet] #Variables selected by the RRF feature selection
+
+################################################################################################
+#Shortfin eel Model
+set.seed(22)
+ModelListMMQ.RRF.angaus <- lapply("angaus", GetRRFModel, myExplanatoryFrame = NZFFD.REC2.Diad.EF, x = Xvars, 
+                                  Classification = T, ntree=1000) #run rrf model with 1000 Regression trees
+
+angaus_vars_RRF = Xvars[ModelListMMQ.RRF.angaus[[1]]$feaSet] #Variables selected by the RRF feature selection
+
+
+Gini_df <- data.frame(importance(ModelListMMQ.RRF.angdie[[1]]), importance(ModelListMMQ.RRF.angaus[[1]])) #obtain importance scores for lf/sf
+colnames(Gini_df) <- c("angdie", "angaus") #rename columns
+write.csv(Gini_df, file = file.path(RRF_path, "Gini_scores.csv")) #save importance scores to csv
+
+################################################################################################
+################################################################################################
+
+################################### POC plot from the REC #############################################
+load(file.path(data_path, "NZ_Coast_NZTM2.RData")) #Load NZ plotting data
+load(file.path(data_path, "FINAL_REC2_FOR_PREDICTIONS.Rdata")) #load REC2
+REC2 = REC2[complete.cases(REC2),] #use the complete cases of the REC2
+
+angdie_pred <- predict(ModelListMMQ.RRF.angdie[[1]], type = "prob", newdata= REC2[, Xvars]) #longfin REC2 predictions
+angaus_pred <- predict(ModelListMMQ.RRF.angaus[[1]], type = "prob", newdata= REC2[, Xvars]) #shortfin REC2 predictions
+
+
+########
+#Residual plots
+
+##
+
+
+
+########
+#Spatial plots
+
+PrettyCut <- function(myFac) { #function for a pretty legend 
+  myLevels <- levels(myFac)
+  myLevels <- as.character(myLevels)
+  myLevels <- lapply(myLevels, function(x) substr(x, start = 2, stop = nchar(x)-1) )
+  myLevels <- lapply(myLevels, function(x) strsplit(x, split = ",")[[1]] )
+  myLevels <- lapply(myLevels, as.numeric)
+  myLevels <- sapply(myLevels, function(x) paste(x, collapse = " to "))
+  levels(myFac) <- myLevels
+  return(myFac)
+}
+
+TheseBreaks <- seq(0,1, by = 0.1) #Breaks to use in the legend
+
+mycols = colorRampPalette(colors=c("darkblue","blue","lightblue","lightgreen","yellow","orange","red")) #the colour palette to use
+Col_Bin_angdie = ceiling( angdie_pred[,"T"]*49 ) + 1 #the particular colours value to use for each predictions - longfin
+Col_Bin_angaus = ceiling( angaus_pred[,"T"]*49 ) + 1 #the particular colours value to use for each predictions - shortfin
+myColours_angdie = mycols(50)[Col_Bin_angdie] #the particular colours to use for each predictions - longfin
+myColours_angaus = mycols(50)[Col_Bin_angaus] #the particular colours to use for each predictions - shortfin
+
+
+################################### Longfin eel #############################################
+jpeg(file.path(RRF_path, "Angdie_FishMap_EF.jpeg"), height=297/25.4, width=210/25.4,units="in", res=600) #map JPEG
+par(mfrow = c(1,1)) #set par
+plot(Y~X, data = NZ_Coast_NZTM2, type = "l", axes = F, ylab = "", xlab = "", 
+     main = "Probability of capture estimates for the longfin eel", cex.main = 1.5, font.main = 1) #longfin REC2 plot
+for(myOrder in 1:8) { #loop to achieve differing cex my streamorder size
+  myCex <- ifelse(myOrder > 3, 0.2, 0.1) #if streamorder is greater than 3 cex=0.2 else cex=0.1
+  if(myOrder > 6) myCex <- 0.3 #if streamorder is greater than 6 cex=0.3
+  
+  myRows <- REC2$StreamOrder == myOrder & !REC2$Is.Lake #apply these to the rows with corresponding streamorder
+  points(REC2$x[myRows], REC2$y.1[myRows], col = myColours_angdie[myRows], pch = 16, cex = myCex) #plot points by each stream order
+}
+legend("topleft", legend = levels( PrettyCut(cut(seq(0.01,0.99, length = 100), breaks = TheseBreaks))),
+       col = mycols(10), pch = 15) #legend with prettycut function
+#par(new = T, fig = c(0,0.5, 0.45, 1.0))
+#hist(angdie_pred[,"T"], cex = 0.5, main = "", xlab = "Prob of occurance", xlim = c(0,1), breaks = TheseBreaks, freq = F)
+dev.off()
+
+
+################################### Shortfin eel #############################################
+jpeg(file.path(RRF_path, "Angaus_FishMap_EF.jpeg"), height=297/25.4, width=210/25.4,units="in", res=600) #map JPEG
+par(mfrow = c(1,1)) #set par
+plot(Y~X, data = NZ_Coast_NZTM2, type = "l", axes = F, ylab = "", xlab = "", 
+     main = "Probability of capture estimates for the shortfin eel", cex.main = 1.5, font.main = 1) #shortfin REC2 plot
+for(myOrder in 1:8) { #loop to achieve differing cex my streamorder size
+  myCex <- ifelse(myOrder > 3, 0.2, 0.1) #if streamorder is greater than 3 cex=0.2 else cex=0.1
+  if(myOrder > 6) myCex <- 0.3 #if streamorder is greater than 6 cex=0.3
+  
+  myRows <- REC2$StreamOrder == myOrder & !REC2$Is.Lake #apply these to the rows with corresponding streamorder
+  points(REC2$x[myRows], REC2$y.1[myRows], col = myColours_angaus[myRows], pch = 16, cex = myCex) #plot points by each stream order
+}
+legend("topleft", legend = levels( PrettyCut(cut(seq(0.01,0.99, length = 100), breaks = TheseBreaks))),
+       col = mycols(10), pch = 15) #legend with prettycut function
+#par(new = T, fig = c(0,0.5, 0.45, 1.0))
+#hist(angaus_pred[,"T"], cex = 0.5, main = "", xlab = "Prob of occurance", xlim = c(0,1), breaks = TheseBreaks, freq = F)
+dev.off()
+
+
+rm(NZ_Coast_NZTM2)
+rm(REC2)
+rm(PrettyCut)
+#rm(TheseBreaks)
+#rm(myColours)
+rm(mycols)
+rm(Col_Bin_angdie)
+rm(Col_Bin_angaus)
+rm(myColours_angdie)
+rm(myColours_angaus)
+
+################################################################################################
+################################################################################################
+
+##################################### Importance plots ##########################################
+cov_labs <- read_xlsx(file.path(data_path, "Covariate labels.xlsx"))
+
+Gini_df$Abbreviation <- rownames(Gini_df)
+Gini_df2<-merge(Gini_df, cov_labs, by = "Abbreviation")
+################################### Longfin eel #############################################
+
+Gini_df2 <- Gini_df2[order(Gini_df2$angdie),] #order importance scores by size of angdie importance
+Gini_df2$angdie_include <- ifelse(Gini_df2$angdie>0, "Included", "Excluded")
+#mycols = vector(length = 87) #col vector the size of the number of variables
+#mycols[Gini_df$angdie > 0] = "black" #variables in the model are black
+#mycols[Gini_df$angdie == 0] = "red" #variables not in the model are in red
+
+jpeg(file.path(RRF_path, "Importanceplot_lf.jpeg"), height=297/25.4, width=220/25.4,units="in", res=600) #JPEG of lf variable importance
+dotchart(Gini_df2$angdie, Gini_df2$`Full Name`, gcolor = "red", cex = 0.75, pch=19, groups = factor(Gini_df2$angdie_include),
+         main = "Longfin eel RRF model feature importance", xlab = "Importance score", cex.main=1.4) #dotplot of variable importance
+dev.off()
+
+
+################################### Shortfin eel #############################################
+
+Gini_df2 <- Gini_df2[order(Gini_df2$angaus),] #order importance scores by size of angaus importance
+Gini_df2$angaus_include <- ifelse(Gini_df2$angaus>0, "Included", "Excluded")
+#mycols = vector(length = 87) #col vector the size of the number of variables
+#mycols[Gini_df$angaus > 0] = "black" #variables in the model are black
+#mycols[Gini_df$angaus == 0] = "red" #variables not in the model are in red
+
+jpeg(file.path(RRF_path, "Importanceplot_sf.jpeg"), height=297/25.4, width=220/25.4,units="in", res=600) #JPEG of sf variable importance
+#par(mfrow = c(1,1))
+dotchart(Gini_df2$angaus, Gini_df2$`Full Name`, gcolor = "red", cex = 0.75, pch=19, groups = factor(Gini_df2$angaus_include),
+         main = "Shortfin eel RRF model feature importance", xlab = "Importance score", cex.main=1.4) #dotplot of variable importance
+dev.off()
+
+
+################################################################################################
+################################################################################################
