@@ -1,5 +1,13 @@
+####        Modelling NZFFD longfin and shortfin eel 
+####            presence/absence data with a RRF model
+####
+####  ------------------------------------------------------------
+####
+####                     Anthony R Charsley
 
-####  PACKAGES
+
+#####################
+## Packages
 library(RRF) #RRF pacakage
 library(ROCR) #auc function
 library(cvAUC) #auc CI's
@@ -66,8 +74,9 @@ write.csv(Gini_df, file = file.path(RRF_path, "Gini_scores.csv")) #save importan
 ################################################################################################
 
 ################################### POC plot from the REC #############################################
-load(file.path(data_path, "NZ_Coast_NZTM2.RData")) #Load NZ plotting data
-load(file.path(data_path, "FINAL_REC2_FOR_PREDICTIONS.Rdata")) #load REC2
+load(file.path(data_path, "NZ_Coast_NZTM2_latlon.RData")) #Load NZ plotting data
+
+load(file.path(data_path, "REC2_latlon.Rdata")) #load REC2
 REC2 = REC2[complete.cases(REC2),] #use the complete cases of the REC2
 
 angdie_pred <- predict(ModelListMMQ.RRF.angdie[[1]], type = "prob", newdata= REC2[, Xvars]) #longfin REC2 predictions
@@ -107,39 +116,78 @@ myColours_angaus = mycols(50)[Col_Bin_angaus] #the particular colours to use for
 ################################### Longfin eel #############################################
 jpeg(file.path(RRF_path, "Angdie_FishMap_EF.jpeg"), height=297/25.4, width=210/25.4,units="in", res=600) #map JPEG
 par(mfrow = c(1,1)) #set par
-plot(Y~X, data = NZ_Coast_NZTM2, type = "l", axes = F, ylab = "", xlab = "", 
-     main = "Probability of capture estimates for the longfin eel", cex.main = 1.5, font.main = 1) #longfin REC2 plot
+plot(Lat~Lon, data = NZ_Coast_NZTM2, type = "l", ylab = "Latitude (Â°N)", xlab = "Longitude (Â°E)", #axes = F, 
+     main = "", cex.main = 1.5, font.main = 1) #longfin REC2 plot
 for(myOrder in 1:8) { #loop to achieve differing cex my streamorder size
   myCex <- ifelse(myOrder > 3, 0.2, 0.1) #if streamorder is greater than 3 cex=0.2 else cex=0.1
   if(myOrder > 6) myCex <- 0.3 #if streamorder is greater than 6 cex=0.3
   
   myRows <- REC2$StreamOrder == myOrder & !REC2$Is.Lake #apply these to the rows with corresponding streamorder
-  points(REC2$x[myRows], REC2$y.1[myRows], col = myColours_angdie[myRows], pch = 16, cex = myCex) #plot points by each stream order
+  points(REC2$Lon[myRows], REC2$Lat[myRows], col = myColours_angdie[myRows], pch = 16, cex = myCex) #plot points by each stream order
 }
 legend("topleft", legend = levels( PrettyCut(cut(seq(0.01,0.99, length = 100), breaks = TheseBreaks))),
-       col = mycols(10), pch = 15) #legend with prettycut function
+       col = mycols(10), pch = 15, cex = 1.4
+) #legend with prettycut function
 #par(new = T, fig = c(0,0.5, 0.45, 1.0))
 #hist(angdie_pred[,"T"], cex = 0.5, main = "", xlab = "Prob of occurance", xlim = c(0,1), breaks = TheseBreaks, freq = F)
 dev.off()
 
 
+# jpeg(file.path(RRF_path, "Angdie_FishMap_EF_2.jpeg"), height=297/25.4, width=210/25.4,units="in", res=600) #map JPEG
+# par(mfrow = c(1,1)) #set par
+# plot(Lat~Lon, data = NZ_Coast_NZTM2, type = "l", ylab = "Latitude (Â°N)", xlab = "", #axes = F, 
+#      main = "", cex.main = 1.5, font.main = 1) #longfin REC2 plot
+# for(myOrder in 1:8) { #loop to achieve differing cex my streamorder size
+#   myCex <- ifelse(myOrder > 3, 0.2, 0.1) #if streamorder is greater than 3 cex=0.2 else cex=0.1
+#   if(myOrder > 6) myCex <- 0.3 #if streamorder is greater than 6 cex=0.3
+#   
+#   myRows <- REC2$StreamOrder == myOrder & !REC2$Is.Lake #apply these to the rows with corresponding streamorder
+#   points(REC2$Lon[myRows], REC2$Lat[myRows], col = myColours_angdie[myRows], pch = 16, cex = myCex) #plot points by each stream order
+# }
+# legend("topleft", legend = levels( PrettyCut(cut(seq(0.01,0.99, length = 100), breaks = TheseBreaks))),
+#        col = mycols(10), pch = 15, cex = 1.2
+#        ) #legend with prettycut function
+# #par(new = T, fig = c(0,0.5, 0.45, 1.0))
+# #hist(angdie_pred[,"T"], cex = 0.5, main = "", xlab = "Prob of occurance", xlim = c(0,1), breaks = TheseBreaks, freq = F)
+# dev.off()
+
+
+
 ################################### Shortfin eel #############################################
 jpeg(file.path(RRF_path, "Angaus_FishMap_EF.jpeg"), height=297/25.4, width=210/25.4,units="in", res=600) #map JPEG
 par(mfrow = c(1,1)) #set par
-plot(Y~X, data = NZ_Coast_NZTM2, type = "l", axes = F, ylab = "", xlab = "", 
-     main = "Probability of capture estimates for the shortfin eel", cex.main = 1.5, font.main = 1) #shortfin REC2 plot
+plot(Lat~Lon, data = NZ_Coast_NZTM2, type = "l", ylab = "Latitude (Â°N)", xlab = "Longitude (Â°E)", #axes = F, 
+     main = "", cex.main = 1.5, font.main = 1) #shortfin REC2 plot
 for(myOrder in 1:8) { #loop to achieve differing cex my streamorder size
   myCex <- ifelse(myOrder > 3, 0.2, 0.1) #if streamorder is greater than 3 cex=0.2 else cex=0.1
   if(myOrder > 6) myCex <- 0.3 #if streamorder is greater than 6 cex=0.3
   
   myRows <- REC2$StreamOrder == myOrder & !REC2$Is.Lake #apply these to the rows with corresponding streamorder
-  points(REC2$x[myRows], REC2$y.1[myRows], col = myColours_angaus[myRows], pch = 16, cex = myCex) #plot points by each stream order
+  points(REC2$Lon[myRows], REC2$Lat[myRows], col = myColours_angaus[myRows], pch = 16, cex = myCex) #plot points by each stream order
 }
 legend("topleft", legend = levels( PrettyCut(cut(seq(0.01,0.99, length = 100), breaks = TheseBreaks))),
-       col = mycols(10), pch = 15) #legend with prettycut function
+       col = mycols(10), pch = 15, cex = 1.4) #legend with prettycut function
 #par(new = T, fig = c(0,0.5, 0.45, 1.0))
 #hist(angaus_pred[,"T"], cex = 0.5, main = "", xlab = "Prob of occurance", xlim = c(0,1), breaks = TheseBreaks, freq = F)
 dev.off()
+
+
+# jpeg(file.path(RRF_path, "Angaus_FishMap_EF_2.jpeg"), height=297/25.4, width=210/25.4,units="in", res=600) #map JPEG
+# par(mfrow = c(1,1)) #set par
+# plot(Lat~Lon, data = NZ_Coast_NZTM2, type = "l", ylab = "Latitude (Â°N)", xlab = "", #axes = F, 
+#      main = "", cex.main = 1.5, font.main = 1) #shortfin REC2 plot
+# for(myOrder in 1:8) { #loop to achieve differing cex my streamorder size
+#   myCex <- ifelse(myOrder > 3, 0.2, 0.1) #if streamorder is greater than 3 cex=0.2 else cex=0.1
+#   if(myOrder > 6) myCex <- 0.3 #if streamorder is greater than 6 cex=0.3
+#   
+#   myRows <- REC2$StreamOrder == myOrder & !REC2$Is.Lake #apply these to the rows with corresponding streamorder
+#   points(REC2$Lon[myRows], REC2$Lat[myRows], col = myColours_angaus[myRows], pch = 16, cex = myCex) #plot points by each stream order
+# }
+# legend("topleft", legend = levels( PrettyCut(cut(seq(0.01,0.99, length = 100), breaks = TheseBreaks))),
+#        col = mycols(10), pch = 15) #legend with prettycut function
+# #par(new = T, fig = c(0,0.5, 0.45, 1.0))
+# #hist(angaus_pred[,"T"], cex = 0.5, main = "", xlab = "Prob of occurance", xlim = c(0,1), breaks = TheseBreaks, freq = F)
+# dev.off()
 
 
 rm(NZ_Coast_NZTM2)
