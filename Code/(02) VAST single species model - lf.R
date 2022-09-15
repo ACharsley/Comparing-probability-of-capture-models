@@ -4,14 +4,6 @@
 ####  ------------------------------------------------------------
 ####
 ####                     Anthony R Charsley
-####
-####
-####  CONTENTS:
-####  ---------
-####  1. Assemble general inputs 
-####  2. Build model settings
-####  3. Run model
-####  4. Plots
 
 
 #####################
@@ -112,96 +104,8 @@ rm(dontinclude_covs) ; rm(Cov_ep) ; rm(diad.preds) #remove as we no longer need 
 save.image(file.path(lf_path, "VAST_inputs_lf.Rdata"))
 
 
-###############
-###############
-#   NZ Maps   #
-###############
-###############
-
-rm(list=ls())
-
-load(file.path(getwd(), "Output/VAST_lf/VAST_inputs_lf.Rdata"))
-
-
-###########
-# Tables
-
-table(Data_Geostat$Gear, round(Data_Geostat$Year))
-
-###########
-# Data maps
-
-# Network data
-netfull <- readRDS(file.path(data_path, "NZ_network.rds"))
-
-#New Zealand map
-nzmap <- ggplot(netfull) +
-  geom_point(aes(x = long, y = lat), cex=0.2) +
-  xlab("Longitude (°E)") + ylab("Latitude (°N)") +
-  theme_bw(base_size = 14)
-
-#Plotting data
-plot_data <- Data_Geostat %>% mutate(p_a = ifelse(Catch_KG > 0, "Presence", "Absence"))
-
-#Add yearly data to NZ map
-map <- nzmap +
-  geom_point(data=plot_data, aes(x = Lon, y = Lat, col = p_a), pch=19, alpha=0.6) +
-  facet_wrap(.~Year) +
-  xlab("Longitude (°E)") + ylab("Latitude (°N)") +
-  #ggtitle("Encounter/non-encounter longfin eel electric fishing observations") +
-  guides(col = guide_legend(title = "")) +
-  scale_colour_manual(values = c("#377EB8", "#E41A1C")) +
-  coord_fixed(1.1) +
-  theme_bw(base_size = 14) +
-  theme(axis.text = element_text(size = rel(0.5)),
-        axis.text.x = element_text(angle = 90))
-ggsave(file.path(figs_path, "NZ_map_with_obs_eachyear_lf.png"), map)
-
-
-###########
-# 6 by 6 map grid
-plot_data$Decade <-  ifelse(plot_data$Year >= 1974 & plot_data$Year <= 1979, "1974-1979",
-                            ifelse(plot_data$Year >= 1980 & plot_data$Year <= 1984, "1980-1984",
-                            ifelse(plot_data$Year >= 1985 & plot_data$Year <= 1989, "1985-1989", 
-                                          ifelse(plot_data$Year >= 1990 & plot_data$Year <= 1994, "1990-1994",
-                                          ifelse(plot_data$Year >= 1995 & plot_data$Year <= 1999, "1995-1999", 
-                                                 ifelse(plot_data$Year >= 2000 & plot_data$Year <= 2004, "2000-2004",
-                                                 ifelse(plot_data$Year >= 2005 & plot_data$Year <= 2009, "2005-2009", 
-                                                        ifelse(plot_data$Year >= 2010 & plot_data$Year <= 2014, "2010-2014", NA)))))
-                            )))
-
-
-table(plot_data$p_a ,plot_data$Decade, useNA = "ifany")
-
-decade <- unique(plot_data$Decade)
-tab <- table(plot_data$p_a ,plot_data$Decade, useNA = "ifany")
-
-data_text <- data.frame("Decade"= decade, label=paste0(tab[2,], "/", tab[1,]), 
-                        x=169, y=-36)
-
-map2 <- nzmap +
-  geom_point(data=plot_data, aes(x = Lon, y = Lat, col = p_a), pch=19, alpha=0.6) +
-  facet_wrap(.~Decade) +
-  xlab("Longitude (°E)") + ylab("Latitude (°N)") +
-  #ggtitle("Encounter/non-encounter longfin eel electric fishing observations") +
-  guides(col = guide_legend(title = "")) +
-  scale_colour_manual(values = c("#377EB8", "#E41A1C")) +
-  coord_fixed(1.1) +
-  theme_bw(base_size = 14) +
-  theme(axis.text = element_text(size = rel(0.5)),
-        axis.text.x = element_text(angle = 90))
-
-map2 <- map2 + geom_text(
-  data = data_text,
-  mapping = aes(x = x, y = y, label = label)
-)
-
-ggsave(file.path(figs_path, "NZ_map_by_decade_lf.png"), map2)
-
 ######################################### 
 ######################################### 
-
-
 
 ######################################### 
 #     PART 2 - Build model settings     #
@@ -237,7 +141,7 @@ Q1_formula <- "~Gear"
 
 
 ## Settings
-#Version="VAST_v4_4_0" #version of VAST used in maseter's analysis
+#Version="VAST_v4_4_0" #version of VAST used in master's analysis
 Version="VAST_v13_1_0" #version of VAST used in updated analysis (May 2022)
 
 #Region
@@ -434,45 +338,103 @@ fit$parameter_estimates$AIC
 # model output
 ##########
 
+source(file.path(getwd(), "Code/Functions/funcs.R"))
+
 map_list = make_map_info( Region = settings$Region,
                           spatial_list = fit$spatial_list,
                           Extrapolation_List = fit$extrapolation_list )
 
 #Probability of encounter plots across all years
-plot_maps(plot_set = 1,
-          fit = fit,
-          working_dir = paste0(fig, "/"),
-          Panel="Category",
-          PlotDF = map_list$PlotDF,
-          MapSizeRatio = c(3.2,2.7),
-          year_labels = as.character(c(1974:2014)),
-          land_color=rgb(0,0,0,alpha=0), #transparant land
-          col = viridisLite::turbo,
-          legend_x = c(0.05,0.1),
-          legend_y = c(0.35,0.95),
-          cex.legend = 1,
-          legend_digits = 0.6,
-          zlim=c(0,1),
-          outermargintext = c("Longitude","Latitude")
-          )
+plotting_data <- plot_maps(plot_set = 1,
+                           fit = fit,
+                           working_dir = paste0(fig, "/"),
+                           Panel="Category",
+                           PlotDF = map_list$PlotDF,
+                           MapSizeRatio = c(3.2,2.7),
+                           n_cells = 1000,
+                           year_labels = as.character(c(1974:2014)),
+                           land_color=rgb(0,0,0,alpha=0), #transparant land
+                           col = viridisLite::turbo,
+                           legend_x = c(0.05,0.1),
+                           legend_y = c(0.35,0.95),
+                           cex.legend = 1,
+                           legend_digits = 0.6,
+                           zlim=c(0,1),
+                           outermargintext = c("Longitude (Â°E)","Latitude (Â°N)")
+                           )
 
-#Probability of encounter plots by each year
-plot_maps(plot_set = 1,
-          fit = fit,
-          working_dir = paste0(fig, "/"),
-          Panel="Year",
-          PlotDF = map_list$PlotDF,
-          MapSizeRatio = c(6.2,5.4),
-          #year_labels = as.character(c(1974:2014)),
-          category_names = "",
-          land_color=rgb(0,0,0,alpha=0), #transparant land
-          col = viridisLite::turbo,
-          legend_x = c(0.05,0.1),
-          legend_y = c(0.35,0.95),
-          cex.legend = 1,
-          legend_digits = 0.6,
-          zlim=c(0,1),
-          outermargintext = c("Longitude","Latitude")
-)
+years_to_plot <- c(1:dim(plotting_data)[2])
+panel_labels <- as.character(c(1974:2014))[years_to_plot]
+
+plot_variable_NZ_map( Y_gt = plotting_data[,years_to_plot,drop=FALSE],
+                      map_list=map_list,
+                      projargs = '+proj=longlat',
+                      working_dir = paste0(fig, "/"),
+                      panel_labels = panel_labels,
+                      file_name = "POC_maps_allyears",
+                      n_cells = 1000,
+                      land_color=rgb(0,0,0,alpha=0), #transparant land
+                      col = viridisLite::turbo,
+                      legend_x = c(0.05,0.1),
+                      legend_y = c(0.35,0.95),
+                      cex.legend = 1,
+                      legend_digits = 0.6,
+                      zlim=c(0,1),
+                      outermargintext = c("Longitude (Â°E)","Latitude (Â°N)"),
+                      mar = c(2,3,2,2))
+
+
+
+
+
+
+for( tI in years_to_plot){
+  Mat_xc = plotting_data[,years_to_plot[tI],drop=TRUE]
+  Mat_xc = array( as.vector(Mat_xc), dim=c(dim(plotting_data)[1],1)) # Reformat to make sure it has same format for everything
+  
+  panel_labels_yr <- panel_labels[years_to_plot[tI]]
+  
+  # Do plot
+  file_name = paste0("POC_map_", panel_labels[years_to_plot[tI]])
+  plot_args = plot_variable_NZ_map( Y_gt = Mat_xc,
+                             map_list=map_list,
+                             projargs = '+proj=longlat',
+                             working_dir = paste0(fig, "/"),
+                             panel_labels = "",
+                             file_name = file_name,
+                             n_cells = 1000,
+                             land_color=rgb(0,0,0,alpha=0), #transparant land
+                             col = viridisLite::turbo,
+                             legend_x = c(0.05,0.1),
+                             legend_y = c(0.35,0.95),
+                             cex.legend = 1,
+                             legend_digits = 0.6,
+                             zlim=c(0,1),
+                             outermargintext = c("Longitude (Â°E)","Latitude (Â°N)"),
+                             mar = c(0,0,2,2))
+}
+
+
+
+
+
+# #Probability of encounter plots by each year
+# plot_maps(plot_set = 1,
+#           fit = fit,
+#           working_dir = paste0(fig, "/"),
+#           Panel="Year",
+#           PlotDF = map_list$PlotDF,
+#           MapSizeRatio = c(6.2,5.4),
+#           #year_labels = as.character(c(1974:2014)),
+#           category_names = "",
+#           land_color=rgb(0,0,0,alpha=0), #transparant land
+#           col = viridisLite::turbo,
+#           legend_x = c(0.05,0.1),
+#           legend_y = c(0.35,0.95),
+#           cex.legend = 1,
+#           legend_digits = 0.6,
+#           zlim=c(0,1),
+#           outermargintext = c("Longitude (Â°E)","Latitude (Â°N)")
+# )
 
 
