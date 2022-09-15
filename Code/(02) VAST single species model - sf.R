@@ -4,14 +4,6 @@
 ####  ------------------------------------------------------------
 ####
 ####                     Anthony R Charsley
-####
-####
-####  CONTENTS:
-####  ---------
-####  1. Assemble general inputs 
-####  2. Build model settings
-####  3. Run model
-####  4. Plots
 
 
 #####################
@@ -110,96 +102,8 @@ rm(dontinclude_covs) ; rm(Cov_ep) ; rm(diad.preds) #remove as we no longer need 
 ## Save inputs
 save.image(file.path(sf_path, "VAST_inputs_sf.Rdata"))
 
-
-##############
-##############
-
-
-###############
-###############
-#   NZ Maps   #
-###############
-###############
-
-rm(list=ls())
-
-load(file.path(getwd(), "Output/VAST_sf/VAST_inputs_sf.Rdata"))
-
-
-###########
-# Data maps
-
-# Network data
-netfull <- readRDS(file.path(data_path, "NZ_network.rds"))
-
-#New Zealand map
-nzmap <- ggplot(netfull) +
-  geom_point(aes(x = long, y = lat), cex=0.2) +
-  xlab("Longitude (°E)") + ylab("Latitude (°N)") +
-  theme_bw(base_size = 14)
-
-#Plotting data
-plot_data <- Data_Geostat %>% mutate(p_a = ifelse(Catch_KG > 0, "Presence", "Absence"))
-
-#Add yearly data to NZ map
-map <- nzmap +
-  geom_point(data=plot_data, aes(x = Lon, y = Lat, col = p_a), pch=19, alpha=0.6) +
-  facet_wrap(.~Year) +
-  xlab("Longitude (°E)") + ylab("Latitude (°N)") +
-  #ggtitle("Encounter/non-encounter longfin eel electric fishing observations") +
-  guides(col = guide_legend(title = "")) +
-  scale_colour_manual(values = c("#377EB8", "#E41A1C")) +
-  coord_fixed(1.1) +
-  theme_bw(base_size = 14) +
-  theme(axis.text = element_text(size = rel(0.5)),
-        axis.text.x = element_text(angle = 90))
-ggsave(file.path(figs_path, "NZ_map_with_obs_eachyear_sf.png"), map)
-
-###########
-# 6 by 6 map grid
-plot_data$Decade <-  ifelse(plot_data$Year >= 1974 & plot_data$Year <= 1979, "1974-1979",
-                            ifelse(plot_data$Year >= 1980 & plot_data$Year <= 1984, "1980-1984",
-                                   ifelse(plot_data$Year >= 1985 & plot_data$Year <= 1989, "1985-1989", 
-                                          ifelse(plot_data$Year >= 1990 & plot_data$Year <= 1994, "1990-1994",
-                                                 ifelse(plot_data$Year >= 1995 & plot_data$Year <= 1999, "1995-1999", 
-                                                        ifelse(plot_data$Year >= 2000 & plot_data$Year <= 2004, "2000-2004",
-                                                               ifelse(plot_data$Year >= 2005 & plot_data$Year <= 2009, "2005-2009", 
-                                                                      ifelse(plot_data$Year >= 2010 & plot_data$Year <= 2014, "2010-2014", NA)))))
-                                   )))
-
-
-table(plot_data$p_a ,plot_data$Decade, useNA = "ifany")
-
-decade <- unique(plot_data$Decade)
-tab <- table(plot_data$p_a ,plot_data$Decade, useNA = "ifany")
-
-data_text <- data.frame("Decade"= decade, label=paste0(tab[2,], "/", tab[1,]), 
-                        x=169, y=-36)
-
-map2 <- nzmap +
-  geom_point(data=plot_data, aes(x = Lon, y = Lat, col = p_a), pch=19, alpha=0.6) +
-  facet_wrap(.~Decade) +
-  xlab("Longitude (°E)") + ylab("Latitude (°N)") +
-  #ggtitle("Encounter/non-encounter longfin eel electric fishing observations") +
-  guides(col = guide_legend(title = "")) +
-  scale_colour_manual(values = c("#377EB8", "#E41A1C")) +
-  coord_fixed(1.1) +
-  theme_bw(base_size = 14) +
-  theme(axis.text = element_text(size = rel(0.5)),
-        axis.text.x = element_text(angle = 90))
-
-map2 <- map2 + geom_text(
-  data = data_text,
-  mapping = aes(x = x, y = y, label = label)
-)
-
-ggsave(file.path(figs_path, "NZ_map_by_decade_sf.png"), map2)
-
 ######################################### 
 ######################################### 
-
-
-
 
 ######################################### 
 #     PART 2 - Build model settings     #
