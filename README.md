@@ -1,4 +1,4 @@
-# SDM-comparisons
+# Comparing probability of capture models
 
 This repository provides all the code and data used for the analyses described in:
 
