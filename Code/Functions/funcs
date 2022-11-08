@@ -295,3 +295,1621 @@ plotResiduals = function( Lat_i, Lon_i, TmbData, Report, Q, projargs = '+proj=lo
 }
 
 
+
+plot_nz_maps <-
+  function( plot_set = 3,
+            fit,
+            PlotDF,
+            projargs = '+proj=longlat',
+            Panel = "Category",
+            year_labels = NULL,
+            years_to_plot = NULL,
+            category_names = NULL,
+            quiet = FALSE,
+            working_dir = paste0(getwd(),"/"),
+            MapSizeRatio,
+            n_cells,
+            plot_value = "estimate",
+            n_samples = 100,
+            country = NULL,
+            sample_fixed = TRUE,
+            Report = fit$Report,
+            TmbData = fit$data_list,
+            Obj = fit$tmb_list$Obj,
+            extrapolation_list = fit$extrapolation_list,
+            Sdreport = fit$parameter_estimates$SD,
+            Map = fit$tmb_list$Map,
+            zlim = NULL,
+            ...){
+    
+    # Local functions
+    extract_value = function( Sdreport, Report, Obj, variable_name, plot_value="estimate", n_samples, sample_fixed=TRUE ){
+      if( missing(Report) ){
+        Report = Obj$report()
+      }
+      if( is.function(plot_value) ){
+        if(missing(Obj)) stop("Must provide `Obj` for `extract_value(.)` in `plot_maps(.)` when specifying a function for argument `plot_value`")
+        Var_r = sample_variable( Sdreport=Sdreport, Obj=Obj, variable_name=variable_name, n_samples=n_samples, sample_fixed=sample_fixed )
+        Return = apply( Var_r, MARGIN=1:(length(dim(Var_r))-1), FUN=plot_value )
+        if( any(dim(Return)!=dim(Report[[variable_name]])) ){
+          stop("Check `extract_value(.)` in `plot_maps(.)`")
+        }
+        dimnames(Return) = dimnames(Report[[variable_name]])
+      }else if( plot_value=="estimate" ){
+        Return = Report[[variable_name]]
+      }else stop("Check input `plot_value` in `plot_maps(.)`")
+      return( Return )
+      # apply( Var_r, MARGIN=c(2,4), FUN=function(mat){sum(abs(mat)==Inf)})
+    }
+    
+    # Extract stuff
+    if( !is.null(Obj) ){
+      if(missing(Report)) Report = Obj$report()
+    }else{
+      if(plot_value!="estimate") stop("Must provide `Obj` to `plot_maps` when using function for `plot_value`")
+    }
+    
+    # Fill in missing inputs
+    if( missing(MapSizeRatio) ){
+      MapSizeRatio = c(3, 3)
+    }
+    
+    # Overwrite labels using run-time user inputs if provided
+    Report = amend_output( Report = Report,
+                           TmbData = TmbData,
+                           Map = Map,
+                           year_labels = year_labels,
+                           category_names = category_names,
+                           extrapolation_list = extrapolation_list )
+    
+    # Loop through plots
+    Return = NULL
+    for(plot_num in plot_set){
+      
+      # Extract elements
+      Array_xct = NULL
+      plot_code <- c("encounter_prob", "pos_catch", "ln_density", "", "", "epsilon_1", "epsilon_2",
+                     "linear_predictor_1", "linear_predictor_2", "density_CV", "covariates_1", "covariates_2", "total_density",
+                     "covariate_effects_1", "covariate_effects_2", "omega_1", "omega_2", "xi_1", "xi_2", "phi_1", "phi_2")[plot_num]
+      
+      # Extract matrix to plot
+      if(plot_num==1){
+        # Presence/absence ("Pres")
+        if( quiet==FALSE ) message(" # plot_num ",plot_num,": Plotting presence/absense maps")
+        if("D_xt"%in%names(Report)) Array_xct = extract_value(Sdreport=Sdreport, Obj=Obj, Report=Report, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="R1_xt")
+        if("D_xct"%in%names(Report)) Array_xct = extract_value(Sdreport=Sdreport, Obj=Obj, Report=Report, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="R1_xct")
+        if("D_xcy"%in%names(Report)) Array_xct = extract_value(Sdreport=Sdreport, Obj=Obj, Report=Report, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="R1_xcy")
+        if("D_gcy"%in%names(Report)) Array_xct = extract_value(Sdreport=Sdreport, Obj=Obj, Report=Report, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="R1_gcy")
+        if("D_gct"%in%names(Report)) Array_xct = extract_value(Sdreport=Sdreport, Obj=Obj, Report=Report, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="R1_gct")
+        if(any(c("dhat_ktp","dpred_ktp")%in%names(Report))) stop("Not implemented for SpatialVAM")
+        message( "`plot_num=1` doesn't work well when using ObsModel[2]==1, because average area-swept doesn't generally match area of extrapolation-grid cells" )
+      }
+      if(plot_num==2){
+        # Positive values ("Pos")
+        if( quiet==FALSE ) message(" # plot_num ",plot_num,": Plotting positive catch rate maps")
+        if("D_xt"%in%names(Report)) Array_xct = log( extract_value(Sdreport=Sdreport, Obj=Obj, Report=Report, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="R2_xt") )
+        if("D_xct"%in%names(Report)) Array_xct = log( extract_value(Sdreport=Sdreport, Obj=Obj, Report=Report, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="R2_xct") )
+        if("D_xcy"%in%names(Report)) Array_xct = log( extract_value(Sdreport=Sdreport, Obj=Obj, Report=Report, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="R2_xcy") )
+        if("D_gcy"%in%names(Report)) Array_xct = log( extract_value(Sdreport=Sdreport, Obj=Obj, Report=Report, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="R2_gcy") )
+        if("D_gct"%in%names(Report)) Array_xct = log( extract_value(Sdreport=Sdreport, Obj=Obj, Report=Report, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="R2_gct") )
+        if(any(c("dhat_ktp","dpred_ktp")%in%names(Report)))  stop("Not implemented for SpatialVAM")
+        message( "`plot_num=2` doesn't work well when using ObsModel[2]==1, because average area-swept doesn't generally match area of extrapolation-grid cells" )
+      }
+      if(plot_num==3){
+        # Density ("Dens")
+        if( quiet==FALSE ) message(" # plot_num ",plot_num,": Plotting density maps (in log-space)")
+        if("D_xt"%in%names(Report)) Array_xct = log( extract_value(Sdreport=Sdreport, Obj=Obj, Report=Report, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="D_xt") )
+        if("D_xct"%in%names(Report)) Array_xct = log( extract_value(Sdreport=Sdreport, Obj=Obj, Report=Report, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="D_xct") )
+        if("D_xcy"%in%names(Report)) Array_xct = log( extract_value(Sdreport=Sdreport, Obj=Obj, Report=Report, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="D_xcy") )
+        if("D_gcy"%in%names(Report)) Array_xct = log( extract_value(Sdreport=Sdreport, Obj=Obj, Report=Report, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="D_gcy") )
+        if("D_gct"%in%names(Report)) Array_xct = log( extract_value(Sdreport=Sdreport, Obj=Obj, Report=Report, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="D_gct") )
+        if("dhat_ktp" %in% names(Report)) Array_xct = aperm(extract_value(Sdreport=Sdreport, Obj=Obj, Report=Report, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="dhat_ktp")[,,cI],c(1,3,2))
+        if("dpred_ktp" %in% names(Report)) Array_xct = aperm(extract_value(Sdreport=Sdreport, Obj=Obj, Report=Report, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="dpred_ktp")[,,cI],c(1,3,2))
+      }
+      if(plot_num==4){
+        # Positive values rescaled ("Pos_Rescaled")
+        stop( "`plot_num=4` is deprecated")
+      }
+      if(plot_num==5){
+        # Density rescaled ("Dens_Rescaled")
+        stop( "`plot_num=5` is deprecated")
+      }
+      if(plot_num==6){
+        # Epsilon for presence/absence ("Eps_Pres")
+        if( quiet==FALSE ) message(" # plot_num ",plot_num,": Plotting spatio-temporal effects (Epsilon) in 1st linear predictor")
+        if("D_xt"%in%names(Report)) Array_xct = extract_value(Sdreport=Sdreport, Obj=Obj, Report=Report, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="Epsilon1_st")
+        if("D_xct"%in%names(Report)) Array_xct = extract_value(Sdreport=Sdreport, Obj=Obj, Report=Report, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="Epsilon1_sct")
+        if("D_xcy"%in%names(Report)) Array_xct = extract_value(Sdreport=Sdreport, Obj=Obj, Report=Report, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="Epsilon1_sct")
+        if(any(c("D_gcy","D_gct")%in%names(Report))) Array_xct = extract_value(Sdreport=Sdreport, Obj=Obj, Report=Report, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="Epsilon1_gct")
+        if(any(c("dhat_ktp","dpred_ktp")%in%names(Report)))  stop("Not implemented for SpatialVAM")
+      }
+      if(plot_num==7){
+        # Epsilon for positive values ("Eps_Pos")
+        if( quiet==FALSE ) message(" # plot_num ",plot_num,": Plotting spatio-temporal effects (Epsilon) in 2nd linear predictor")
+        if("D_xt"%in%names(Report)) Array_xct = extract_value(Sdreport=Sdreport, Obj=Obj, Report=Report, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="Epsilon2_st")
+        if("D_xct"%in%names(Report)) Array_xct = extract_value(Sdreport=Sdreport, Obj=Obj, Report=Report, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="Epsilon2_sct")
+        if("D_xcy"%in%names(Report)) Array_xct = extract_value(Sdreport=Sdreport, Obj=Obj, Report=Report, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="Epsilon2_sct")
+        if(any(c("D_gcy","D_gct")%in%names(Report))) Array_xct = extract_value(Sdreport=Sdreport, Obj=Obj, Report=Report, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="Epsilon2_gct")
+        if(any(c("dhat_ktp","dpred_ktp")%in%names(Report)))  stop("Not implemented for SpatialVAM")
+      }
+      if(plot_num==8){
+        # Linear predictor for probability of encounter
+        if( quiet==FALSE ) message(" # plot_num ",plot_num,": Plotting 1st predictor after action of link function")
+        if("D_xt"%in%names(Report)) Array_xct = extract_value(Sdreport=Sdreport, Obj=Obj, Report=Report, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="P1_xt")
+        if("D_xct"%in%names(Report)) Array_xct = extract_value(Sdreport=Sdreport, Obj=Obj, Report=Report, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="P1_xct")
+        if("D_xcy"%in%names(Report)) Array_xct = extract_value(Sdreport=Sdreport, Obj=Obj, Report=Report, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="P1_xcy")
+        if(any(c("D_gcy","D_gct")%in%names(Report))) stop("`plot_maps` not implemented for requested plot_num")
+        if(any(c("dhat_ktp","dpred_ktp")%in%names(Report)))  stop("Not implemented for SpatialVAM")
+      }
+      if(plot_num==9){
+        # Linear predictor for positive catch rates
+        if( quiet==FALSE ) message(" # plot_num ",plot_num,": Plotting 2nd predictor after action of link function")
+        if("D_xt"%in%names(Report)) Array_xct = extract_value(Sdreport=Sdreport, Obj=Obj, Report=Report, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="P2_xt")
+        if("D_xct"%in%names(Report)) Array_xct = extract_value(Sdreport=Sdreport, Obj=Obj, Report=Report, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="P2_xct")
+        if("D_xcy"%in%names(Report)) Array_xct = extract_value(Sdreport=Sdreport, Obj=Obj, Report=Report, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="P2_xcy")
+        if(any(c("D_gcy","D_gct")%in%names(Report))) stop("`plot_maps` not implemented for requested plot_num")
+        if(any(c("dhat_ktp","dpred_ktp")%in%names(Report)))  stop("Not implemented for SpatialVAM")
+      }
+      if(plot_num==10){
+        # Density ("Dens") CV             # Index_xtl
+        if( quiet==FALSE ) message(" # plot_num ",plot_num,": Plotting density maps")
+        if( is.null(Sdreport) ) stop("Must supply 'Sdreport' if 'plot_num=10'")
+        if("D_xt"%in%names(Report)){
+          if( !("log(Index_xtl)" %in% rownames(TMB::summary.sdreport(Sdreport))) ) stop("Please re-run with Options('SD_site_logdensity'=1,...) to use 'plot_num=10' in 'SpatialDeltaGLMM'")
+          Array_xct = array( TMB::summary.sdreport(Sdreport)[which(rownames(TMB::summary.sdreport(Sdreport))=="log(Index_xtl)"),], dim=c(dim(Report$D_xt),ncol(Report$Index_tl),2), dimnames=list(NULL,NULL,NULL,c('Estimate','Std. Error')) )[,,1,'Std. Error']
+        }
+        if("D_xct"%in%names(Report)){
+          if( !("log(Index_xctl)" %in% rownames(TMB::summary.sdreport(Sdreport))) ) stop("Please re-run with Options('SD_site_logdensity'=1,...) to use 'plot_num=10' in 'VAST'")
+          Array_xct = array( TMB::summary.sdreport(Sdreport)[which(rownames(TMB::summary.sdreport(Sdreport))=="log(Index_xctl)"),], dim=c(dim(Report$D_xct),dim(Report$Index_ctl)[3],2), dimnames=list(NULL,NULL,NULL,NULL,c('Estimate','Std. Error')) )[,,,1,'Std. Error']
+        }
+        if("D_xcy"%in%names(Report)){
+          if( !("log(Index_xcyl)" %in% rownames(TMB::summary.sdreport(Sdreport))) ) stop("Please re-run with Options('SD_site_logdensity'=1,...) to use 'plot_num=10' in 'VAST'")
+          Array_xct = array( TMB::summary.sdreport(Sdreport)[which(rownames(TMB::summary.sdreport(Sdreport))=="log(Index_xcyl)"),], dim=c(dim(Report$D_xcy),dim(Report$Index_cyl)[3],2), dimnames=list(NULL,NULL,NULL,NULL,c('Estimate','Std. Error')) )[,,,1,'Std. Error']
+        }
+        if(any(c("dhat_ktp","dpred_ktp")%in%names(Report))) stop("'plot_num=10' not implemented for 'SpatialVAM'")
+        # Convert to CV
+        Array_xct = sqrt( exp(Array_xct^2) - 1 )
+        if(any(c("D_gcy","D_gct")%in%names(Report))) stop("`plot_maps` not implemented for requested plot_num")
+      }
+      if(plot_num==11){
+        if( quiet==FALSE ) message(" # plot_num ",plot_num,": Plotting covariates for 1st linear predictor")
+        if(is.null(TmbData)) stop( "Must provide `TmbData` to plot covariates" )
+        #if(!("X_xtp" %in% names(TmbData))) stop( "Can only plot covariates for VAST version >= 2.0.0" )
+        if("X_xtp"%in%names(TmbData)) Array_xct = aperm( TmbData$X_xtp, perm=c(1,3,2) )
+        if("X_gtp"%in%names(TmbData)) Array_xct = aperm( TmbData$X_gtp, perm=c(1,3,2) )
+        if("X_gctp"%in%names(TmbData)) Array_xct = aperm( array(TmbData$X_gctp[,1,,],dim(TmbData$X_gctp)[c(1,3,4)]), perm=c(1,3,2) )
+        if("X1_gctp"%in%names(TmbData)) Array_xct = aperm( array(TmbData$X1_gctp[,1,,],dim(TmbData$X1_gctp)[c(1,3,4)]), perm=c(1,3,2) )
+        category_names = seq_len(dim(Array_xct)[2])
+      }
+      if(plot_num==12){
+        if( quiet==FALSE ) message(" # plot_num ",plot_num,": Plotting covariates for 2nd linear predictor")
+        if(is.null(TmbData)) stop( "Must provide `TmbData` to plot covariates" )
+        if("X2_gctp"%in%names(TmbData)) Array_xct = aperm( array(TmbData$X2_gctp[,1,,],dim(TmbData$X2_gctp)[c(1,3,4)]), perm=c(1,3,2) )
+        category_names = seq_len(dim(Array_xct)[2])
+      }
+      if(plot_num==13){
+        # Total density ("Dens")
+        if( quiet==FALSE ) message(" # plot_num ",plot_num,": Plotting total density")
+        if("D_xt"%in%names(Report)) Array_xct = log(Report$D_xt)
+        if("D_xct"%in%names(Report)) Array_xct = log(apply(Report$D_xct, FUN=sum, MARGIN=c(1,3)))
+        if("D_xcy"%in%names(Report)) Array_xct = log(apply(Report$D_xcy, FUN=sum, MARGIN=c(1,3)))
+        if("D_gcy"%in%names(Report)) Array_xct = log(apply(Report$D_gcy, FUN=sum, MARGIN=c(1,3)))
+        if("D_gct"%in%names(Report)) Array_xct = log(apply(Report$D_gct, FUN=sum, MARGIN=c(1,3)))
+        logsum = function(vec){ max(vec) + log(sum(exp(vec-max(vec)))) }
+        if("dhat_ktp" %in% names(Report)) Array_xct = apply(aperm(Report$dhat_ktp,c(1,3,2)), FUN=logsum, MARGIN=c(1,3))
+        if("dpred_ktp" %in% names(Report)) Array_xct = apply(aperm(Report$dpred_ktp,c(1,3,2)), FUN=logsum, MARGIN=c(1,3))
+      }
+      if(plot_num==14){
+        # Covariate effects for probability of encounter
+        if( quiet==FALSE ) message(" # plot_num ",plot_num,": Plotting covariate effects for 1st linear predictor")
+        if("D_xt"%in%names(Report)) stop()
+        if("D_xct"%in%names(Report)) stop()
+        if("D_xcy"%in%names(Report)) Array_xct = extract_value(Sdreport=Sdreport, Report=Report, Obj=Obj, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="eta1_xct")
+        if(any(c("D_gcy","D_gct")%in%names(Report))) Array_xct = extract_value(Sdreport=Sdreport, Report=Report, Obj=Obj, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="eta1_gct")
+        if("dhat_ktp" %in% names(Report)) stop()
+        if("dpred_ktp" %in% names(Report)) stop()
+      }
+      if(plot_num==15){
+        # Covariate effects for positive catch rates
+        if( quiet==FALSE ) message(" # plot_num ",plot_num,": Plotting covariate effects for 2nd linear predictor")
+        if("D_xt"%in%names(Report)) stop()
+        if("D_xct"%in%names(Report)) stop()
+        if("D_xcy"%in%names(Report)) Array_xct = extract_value(Sdreport=Sdreport, Report=Report, Obj=Obj, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="eta2_xct")
+        if(any(c("D_gcy","D_gct")%in%names(Report))) Array_xct = extract_value(Sdreport=Sdreport, Report=Report, Obj=Obj, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="eta2_gct")
+        if("dhat_ktp" %in% names(Report)) stop()
+        if("dpred_ktp" %in% names(Report)) stop()
+      }
+      if(plot_num==16){
+        # Spatial effects for probability of encounter
+        if( quiet==FALSE ) message(" # plot_num ",plot_num,": plotting spatial effects (Omega) for 1st linear predictor")
+        if("D_xt"%in%names(Report)) stop()
+        if("D_xct"%in%names(Report)) stop()
+        if("D_xcy"%in%names(Report)) Array_xct = Report$Omega1_sc %o% 1
+        if(any(c("D_gcy","D_gct")%in%names(Report))) Array_xct = extract_value(Sdreport=Sdreport, Report=Report, Obj=Obj, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="Omega1_gc") %o% 1
+        if("dhat_ktp" %in% names(Report)) stop()
+        if("dpred_ktp" %in% names(Report)) stop()
+      }
+      if(plot_num==17){
+        # Spatial effects for positive catch rates
+        if( quiet==FALSE ) message(" # plot_num ",plot_num,": plotting spatial effects (Omega) for 2nd linear predictor")
+        if("D_xt"%in%names(Report)) stop()
+        if("D_xct"%in%names(Report)) stop()
+        if("D_xcy"%in%names(Report)) Array_xct = Report$Omega2_sc %o% 1
+        if(any(c("D_gcy","D_gct")%in%names(Report))) Array_xct = extract_value(Sdreport=Sdreport, Report=Report, Obj=Obj, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="Omega2_gc") %o% 1
+        if("dhat_ktp" %in% names(Report)) stop()
+        if("dpred_ktp" %in% names(Report)) stop()
+      }
+      if(plot_num==18){
+        # Spatially-varying response for density covariates in 1st linear predictor
+        if( quiet==FALSE ) message(" # plot_num ",plot_num,": plotting spatially-varying response to density covariates (Xi) for 1st linear predictor")
+        if("D_xt"%in%names(Report)) stop()
+        if("D_xct"%in%names(Report)) stop()
+        if("D_xcy"%in%names(Report)) stop()
+        if(any(c("D_gcy","D_gct")%in%names(Report))) Array_xct = extract_value(Sdreport=Sdreport, Report=Report, Obj=Obj, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="Xi1_gcp")
+        if("dhat_ktp" %in% names(Report)) stop()
+        if("dpred_ktp" %in% names(Report)) stop()
+      }
+      if(plot_num==19){
+        # Spatially-varying response for density covariates in 1st linear predictor
+        if( quiet==FALSE ) message(" # plot_num ",plot_num,": plotting spatially-varying response to density covariates (Xi) for 2nd linear predictor")
+        if("D_xt"%in%names(Report)) stop()
+        if("D_xct"%in%names(Report)) stop()
+        if("D_xcy"%in%names(Report)) stop()
+        if(any(c("D_gcy","D_gct")%in%names(Report))) Array_xct = extract_value(Sdreport=Sdreport, Report=Report, Obj=Obj, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="Xi2_gcp")
+        if("dhat_ktp" %in% names(Report)) stop()
+        if("dpred_ktp" %in% names(Report)) stop()
+      }
+      if(plot_num==20){
+        # Spatially-varying response for catchability covariates in 1st linear predictor
+        if( quiet==FALSE ) message(" # plot_num ",plot_num,": plotting spatially-varying response to catchability covariates (Phi) for 1st linear predictor")
+        if("D_xt"%in%names(Report)) stop()
+        if("D_xct"%in%names(Report)) stop()
+        if("D_xcy"%in%names(Report)) stop()
+        if(any(c("Phi1_gk")%in%names(Report))) Array_xct = extract_value(Sdreport=Sdreport, Report=Report, Obj=Obj, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="Phi1_gk")
+        #if(any(c("D_gcy","D_gct")%in%names(Report))) stop("not yet implemented")
+        if("dhat_ktp" %in% names(Report)) stop()
+        if("dpred_ktp" %in% names(Report)) stop()
+        Array_xct = aperm( Array_xct %o% 1, c(1,3,2) )
+      }
+      if(plot_num==21){
+        # Spatially-varying response for catchability covariates in 1st linear predictor
+        if( quiet==FALSE ) message(" # plot_num ",plot_num,": plotting spatially-varying response to catchability covariates (Phi) for 2nd linear predictor")
+        if("D_xt"%in%names(Report)) stop()
+        if("D_xct"%in%names(Report)) stop()
+        if("D_xcy"%in%names(Report)) stop()
+        if(any(c("Phi2_gk")%in%names(Report))) Array_xct = extract_value(Sdreport=Sdreport, Report=Report, Obj=Obj, plot_value=plot_value, sample_fixed=sample_fixed, n_samples=n_samples, variable_name="Phi2_gk")
+        #if(any(c("D_gcy","D_gct")%in%names(Report))) stop("not yet implemented")
+        if("dhat_ktp" %in% names(Report)) stop()
+        if("dpred_ktp" %in% names(Report)) stop()
+        Array_xct = aperm( Array_xct %o% 1, c(1,3,2) )
+      }
+      
+      # For now, avoid units in plots ... could add units to colorbar in future
+      Array_xct = strip_units( Array_xct )
+      
+      # Replace -Inf e.g. from log(Density) = 0 with NA
+      Array_xct = ifelse( Array_xct == -Inf, NA, Array_xct )
+      Ncategories = dim(Array_xct)[2]
+      Nyears = dim(Array_xct)[3]
+      
+      # Check for issues
+      if( is.null(Array_xct)) stop("Problem with `plot_num` in `plot_maps(.)")
+      Bad_xct = ifelse( is.na(Array_xct), FALSE, Array_xct==Inf )
+      if( any(Bad_xct) ) stop("plot_maps(.) has some element of output that is Inf or -Inf, please check results")
+      
+      # Get default years_to_plot_modified ... must remake for each plot_num
+      years_to_plot_modified = years_to_plot
+      if( names(dimnames(fit$Report$D_gct))[3] != "Time" ){
+        years_to_plot_modified = NULL
+      }
+      if( !all(years_to_plot_modified %in% seq_len(dim(Array_xct)[3])) ){
+        years_to_plot_modified = NULL
+      }
+      if( is.null(years_to_plot_modified) ) years_to_plot_modified = seq_len(dim(Array_xct)[3])
+      
+      # Get default year_labels_modified & category_names_modified ... must remake for each plot_num
+      year_labels_modified = dimnames(Array_xct)[[3]]
+      category_names_modified = dimnames(Array_xct)[[2]]
+      #year_labels_modified = year_labels
+      #category_names_modified = category_names
+      #if( is.null(year_labels_modified) ) year_labels_modified = dimnames(Array_xct)[[3]]
+      #if( is.null(year_labels_modified) ) year_labels_modified = paste0( "Time_", 1:dim(Array_xct)[3] )
+      #if( is.null(category_names_modified) ) category_names_modified = dimnames(Array_xct)[[2]]
+      #if( is.null(category_names_modified) ) category_names_modified = paste0( "Category_", 1:dim(Array_xct)[2] )
+      
+      # Plot for each category
+      if( tolower(Panel)=="category" & all(dim(Array_xct)>0) ){
+        if(length(dim(Array_xct))==2) Nplot = 1
+        if(length(dim(Array_xct))==3) Nplot = dim(Array_xct)[2]
+        for( cI in 1:Nplot){
+          if(length(dim(Array_xct))==2) Return = Mat_xt = Array_xct
+          if(length(dim(Array_xct))==3) Return = Mat_xt = array(as.vector(Array_xct[,cI,]),dim=dim(Array_xct)[c(1,3)])
+          panel_labels = year_labels_modified[years_to_plot_modified]
+          #if( ncol(Mat_xt[,years_to_plot_modified,drop=FALSE]) == length(year_labels_modified[years_to_plot_modified]) ){
+          #  panel_labels = year_labels_modified[years_to_plot_modified]
+          #}else{
+          #  panel_labels = rep("", ncol(Mat_xt[,years_to_plot_modified,drop=FALSE]))
+          #}
+          
+          file_name = paste0(plot_code, ifelse(Nplot>1, paste0("--",category_names_modified[cI]), ""), ifelse(is.function(plot_value),"-transformed","-predicted") )
+          plot_args = plot_variable_NZ_map( Y_gt = Mat_xt[,years_to_plot_modified,drop=FALSE],
+                                     map_list=list("PlotDF"=PlotDF, "MapSizeRatio"=MapSizeRatio),
+                                     projargs = projargs,
+                                     working_dir = working_dir,
+                                     panel_labels = panel_labels,
+                                     file_name = file_name,
+                                     n_cells = n_cells,
+                                     zlim = zlim,
+                                     country = country,
+                                     ... )
+        }
+      }
+      # Plot for each year
+      if( tolower(Panel)=="year" & all(dim(Array_xct)>0) ){
+        Nplot = length(years_to_plot_modified)
+        for( tI in 1:Nplot){
+          if(length(dim(Array_xct))==2) Mat_xc = Array_xct[,years_to_plot_modified[tI],drop=TRUE]
+          if(length(dim(Array_xct))==3) Mat_xc = Array_xct[,,years_to_plot_modified[tI],drop=TRUE]
+          Return = Mat_xc = array( as.vector(Mat_xc), dim=c(dim(Array_xct)[1],Ncategories)) # Reformat to make sure it has same format for everything
+          
+          # Do plot
+          file_name = paste0(plot_code, ifelse(Nplot>1, paste0("--",year_labels_modified[years_to_plot_modified][tI]), ""), ifelse(is.function(plot_value),"-transformed","-predicted") )
+          plot_args = plot_variable_NZ_map( Y_gt = Mat_xc,
+                                            map_list=list("PlotDF"=PlotDF, "MapSizeRatio"=MapSizeRatio),
+                                            projargs = projargs,
+                                            working_dir = working_dir,
+                                            panel_labels = category_names_modified,
+                                            file_name = file_name,
+                                            n_cells = n_cells,
+                                            zlim = zlim,
+                                            country = country,
+                                            ... )
+        }
+      }
+    }
+    if( is.null(Return) & quiet==FALSE ) message(" # No available plots selected in `plot_set`")
+    
+    return( invisible(Return) )
+  }
+
+
+
+
+plot_variable_NZ_map <-
+  function( Y_gt,
+            map_list,
+            panel_labels = NULL,
+            projargs = '+proj=longlat',
+            map_resolution = "medium",
+            file_name = "density",
+            working_dir = paste0(getwd(),"/"),
+            Format = "png",
+            Res = 200,
+            add = FALSE,
+            outermargintext = c("Eastings","Northings"),
+            zlim = NULL,
+            col = viridisLite::viridis,
+            mar = c(0,0,2,0),
+            oma = c(4,4,0,0),
+            legend_x = c(0,0.05),
+            legend_y = c(0.05,0.45),
+            cex.legend = 1,
+            mfrow,
+            land_color = "grey",
+            n_cells = NULL,
+            xlim,
+            ylim,
+            country = NULL,
+            contour_nlevels = 0,
+            fun = mean,
+            format = "raster",
+            cex.points = 1,
+            legend_digits = 1,
+            ...){
+    
+    ###################
+    # Settings and inputs
+    ###################
+    
+    # Check for problems and fill in missing stuff
+    if( !is.matrix(Y_gt) ){
+      # as.numeric needed to strip units for is.vector to work
+      Y_gt = matrix(Y_gt, ncol=1)
+    }
+    if( is.null(zlim)){
+      zlim = range(Y_gt, na.rm=TRUE)
+    }
+    if( missing(map_list) || is.null(map_list$MapSizeRatio) ){
+      MapSizeRatio = c(3, 3)
+    }else{
+      MapSizeRatio = map_list$MapSizeRatio
+    }
+    if( !("PlotDF" %in% names(map_list)) ) stop("Check input `map_list`")
+    Y_gt = Y_gt[ map_list$PlotDF[which(map_list$PlotDF[,'Include']>0),'x2i'], , drop=FALSE]
+    if(missing(n_cells) || is.null(n_cells)) n_cells = nrow(Y_gt)
+    if( missing(mfrow) ){
+      mfrow = ceiling(sqrt(ncol(Y_gt)))
+      mfrow = c( mfrow, ceiling(ncol(Y_gt)/mfrow) )
+    }
+    if( is.null(panel_labels) ){
+      panel_labels = rep("", ncol(Y_gt))
+    }
+    if( length(panel_labels) != ncol(Y_gt) ){
+      warning( "panel_labels and `ncol(Y_gt)` don't match: Changing panel_labels'")
+      panel_labels = rep("", ncol(Y_gt))
+    }
+    if( is.null(col)){
+      col = colorRampPalette(colors=c("darkblue","blue","lightblue","lightgreen","yellow","orange","red"))
+    }
+    if( is.function(col)){
+      col = col(1000)
+    }
+    if( !any(is.na(c(legend_x,legend_y))) ){
+      if( any(c(legend_x,legend_y) > 1.2) | any(c(legend_x,legend_y) < -0.2) ){
+        stop("Check values for `legend_x` and `legend_y`")
+      }
+    }
+    # Location of extrapolation-grid cells
+    loc_g = map_list$PlotDF[which(map_list$PlotDF[,'Include']>0),c('Lon','Lat')]
+    
+    # CRS for original and new projections
+    CRS_orig = sp::CRS( '+proj=longlat' )
+    CRS_proj = sp::CRS( projargs )
+    
+    # Data for mapping
+    #map_data = rnaturalearth::ne_coastline(scale=switch(map_resolution, "low"=110, "medium"=50, "high"=10, 50), continent="america")
+    map_data = rnaturalearth::ne_countries(scale=switch(map_resolution, "low"=110, "medium"=50, "high"=10, 50), country=country)
+    # Fix warning messages from projecting rnaturalearth object
+    # Solution: Recreate SpatialPolygonsDataFrame from output
+    map_data = sp::SpatialPolygonsDataFrame( Sr=sp::SpatialPolygons(slot(map_data,"polygons"),proj4string=CRS_orig), data=slot(map_data,"data") )
+    # comment(slot(map_data, "proj4string")) =  comment(sp::CRS("+proj=longlat"))
+    map_proj = sp::spTransform(map_data, CRSobj=CRS_proj)
+    
+    ###################
+    # Make panel figure
+    ###################
+    
+    # Define device
+    Par = list( mfrow=mfrow, mar=mar, oma=oma, ...)
+    if(Format=="png"){
+      png(file=paste0(working_dir,file_name,".png"),
+          width=Par$mfrow[2]*MapSizeRatio[2],
+          height=Par$mfrow[1]*MapSizeRatio[1], res=Res, units='in')
+      on.exit( dev.off() )
+    }
+    if(Format=="jpg"){
+      jpeg(file=paste0(working_dir,file_name,".jpg"),
+           width=Par$mfrow[2]*MapSizeRatio[2],
+           height=Par$mfrow[1]*MapSizeRatio[1], res=Res, units='in')
+      on.exit( dev.off() )
+    }
+    if(Format%in%c("tif","tiff")){
+      tiff(file=paste0(working_dir,file_name,".tif"),
+           width=Par$mfrow[2]*MapSizeRatio[2],
+           height=Par$mfrow[1]*MapSizeRatio[1], res=Res, units='in')
+      on.exit( dev.off() )
+    }
+    if(add==FALSE) par( Par )
+    
+    # Loop across columns (years)
+    for( tI in 1:ncol(Y_gt) ){
+      
+      # Read extrapolation grid
+      Points_orig = sp::SpatialPointsDataFrame( coords=loc_g, data=data.frame("y"=Y_gt[,tI]), proj4string=CRS_orig )
+      
+      # Reproject to Lat-Long
+      Points_LongLat = sp::spTransform( Points_orig, sp::CRS('+proj=longlat') )
+      
+      # Re-project to plotting CRS
+      Points_proj = sp::spTransform( Points_orig, CRS_proj )
+      
+      # Get Zlim
+      Zlim = zlim
+      if(is.na(Zlim[1])) Zlim = range(Y_gt[,tI],na.rm=TRUE)
+      if(missing(xlim)) xlim = Points_proj@bbox[1,]
+      if(missing(ylim)) ylim = Points_proj@bbox[2,]
+      
+      # Do plot
+      if( format=="raster"  ){
+        if( all(is.na(Y_gt[,tI])) ){
+          # Empty plot if no data
+          plot( x=Points_proj@coords[,1], y=Points_proj@coords[,2], type="n", xaxt="n", yaxt="n", 
+                xlim=xlim, ylim=ylim, xlab="", ylab="" )
+        }else{
+          plot( x=Points_proj@coords[,1], y=Points_proj@coords[,2], type="n", xaxt="n", yaxt="n", 
+                xlim=xlim, ylim=ylim, xlab="", ylab="" )
+          cell.size = mean(diff(Points_proj@bbox[1,]),diff(Points_proj@bbox[2,])) / floor(sqrt(n_cells))
+          # Experimental
+          if( TRUE ){
+            Raster_layer = raster::raster( Points_proj, crs=CRS_proj, nrows=floor(sqrt(n_cells)), ncols=floor(sqrt(n_cells)) )
+            Raster_proj = raster::rasterize( x=Points_proj@coords, y=Raster_layer, field=as.numeric(Points_proj@data[,1]), fun=mean )
+            raster::image( Raster_proj, col=col, zlim=Zlim, add=TRUE )
+          }else{
+            # Interpolate and plot as raster
+            Raster_proj = plotKML::vect2rast( Points_proj, cell.size=cell.size, fun=fun )
+            image( Raster_proj, col=col, zlim=Zlim, add=TRUE )
+          }
+          # Add contour lines
+          if( contour_nlevels > 0 ){
+            contour( Raster_proj, add=TRUE, nlevels=contour_nlevels )
+          }
+        }
+      }else if( format=="points" ){
+        # Plot points
+        Points_col = col[cut(Y_gt[,tI],breaks=seq(Zlim[1],Zlim[2],length=length(col)),include.lowest=TRUE)]
+        points( x=Points_proj@coords[,1], y=Points_proj@coords[,2], col=Points_col, pch=20, cex=cex.points, xaxt="n", yaxt="n" )
+      }
+      
+      #browser()
+      
+      # Plot maps using rnaturalearth
+      # Make plot after adding raster or points, to overwrite land
+      sp::plot( map_proj, col=land_color, add=TRUE )
+      
+      # Title and box
+      if(ncol(Y_gt) == 1){
+        title( panel_labels[tI], line=0.1, cex.main=ifelse(is.null(Par$cex.main), 1.5, Par$cex.main), cex=ifelse(is.null(Par$cex.main), 1.5, Par$cex.main) )
+        box()
+      }else{
+        title( panel_labels[tI], line=0.1, cex.main=2, cex=2)
+        box()
+      }
+      
+      #title( panel_labels[tI], line=0.1, cex.main=ifelse(is.null(Par$cex.main), 1.5, Par$cex.main), cex=ifelse(is.null(Par$cex.main), 1.5, Par$cex.main) )
+      #title( panel_labels[tI], line=0.1, cex.main=2, cex=2)
+      #box()
+      
+      # Include legend
+      if( !any(is.na(c(legend_x,legend_y))) & (tI==ncol(Y_gt) | is.na(zlim[1])) ){
+      #if(!any(is.na(c(legend_x,legend_y)))){  #Include scale on each plot
+        xl = (1-legend_x[1])*par('usr')[1] + (legend_x[1])*par('usr')[2]
+        xr = (1-legend_x[2])*par('usr')[1] + (legend_x[2])*par('usr')[2]
+        yb = (1-legend_y[1])*par('usr')[3] + (legend_y[1])*par('usr')[4]
+        yt = (1-legend_y[2])*par('usr')[3] + (legend_y[2])*par('usr')[4]
+        if( diff(legend_y) > diff(legend_x) ){
+          align = c("lt","rb")[2]
+          gradient = c("x","y")[2]
+        }else{
+          align = c("lt","rb")[1]
+          gradient = c("x","y")[1]
+        }
+        plotrix::color.legend(xl=xl, yb=yb, xr=xr, yt=yt, legend=round(seq(Zlim[1],Zlim[2],length=4),legend_digits), rect.col=col, cex=cex.legend, align=align, gradient=gradient)
+      }
+      
+      if(ncol(Y_gt) == 1){
+        axis(1)
+        axis(2)
+      }else{
+        
+        # Lat / Lon axis
+        Nrow = ceiling( sqrt(ncol(Y_gt)) )
+        Ncol = ceiling( ncol(Y_gt)/Nrow )
+        if( tI>(ncol(Y_gt)-Ncol) ) axis(1,cex.axis=2)
+        if( tI%%Ncol == 1 ) axis(2, cex.axis=2)
+        
+      }
+    
+      
+      
+      #browser()
+      
+      
+      
+    }
+    
+    
+    
+    if(ncol(Y_gt) == 1){
+      # Margin text
+      if(add==FALSE) mtext(side=1, outer=TRUE, outermargintext[1], cex=1, line=par()$oma[1]/2) #cex=1.75
+      if(add==FALSE) mtext(side=2, outer=TRUE, outermargintext[2], cex=1, line=par()$oma[2]/2) #cex=1.75
+    }else{
+      
+      # Margin text
+      if(add==FALSE) mtext(side=1, outer=TRUE, outermargintext[1], cex=1.75, line=par()$oma[1]/2) #cex=1.75
+      if(add==FALSE) mtext(side=2, outer=TRUE, outermargintext[2], cex=1.75, line=par()$oma[2]/2) #cex=1.75
+      
+    }
+    
+    
+    
+    
+    
+    # return stuff as necessary
+    return( invisible(list("Par"=Par, "cell.size"=cell.size, "n_cells"=n_cells, "xlim"=xlim, "ylim"=ylim)) )
+  }
+
+
+
+
+
+
+# ################################ Cross validation function ######################################
+# My_Crossvalidate_Fn = function(record_dir, model, user_input_grid, covariate_inp, X1config_cp, X1_formula,
+#                                catchability_cov_inp, Q1_formula,
+#                                group_i=NULL, kfold, spatial_par=NULL, rep=1, observations, ... ){
+#   
+#   mylist = list()
+#   
+#   original_data = model$data_frame
+#   
+#   # Lump observations into groups
+#   if( is.null(group_i) || length(group_i)!=nrow(original_data) & is.null(spatial_par) ){
+#     message( "Generating group_i" )
+#     Group_i = sample( x=1:kfold, size=nrow(original_data), replace=TRUE )
+#   }
+#   if(!is.null(group_i) & length(group_i)==nrow(original_data) & is.null(spatial_par)){
+#     message( "Using input group_i" )
+#     Group_i = group_i
+#   }
+#   if(!is.null(spatial_par)){
+#     message( "Using input spatial_par" )
+#     Group_i=rep(NA, nrow(original_data))
+#     for(k in 1:kfold){
+#       Group_i[spatial_par[[rep]][[k]]$test] = k
+#     }
+#   }
+#   
+#   save(Group_i, file=file.path(record_dir,"Group_i.RData"))
+#   
+#   # Results
+#   # Loop through
+#   for(i in 1:kfold){
+#     
+#     #Directory
+#     CrossvalidationDir = file.path(record_dir,paste0("k=",i))
+#     dir.create( CrossvalidationDir )
+#     
+#     PredTF_i = ifelse(Group_i==i, 1, 0)
+#     
+#     tryCatch({
+#       
+#       # Refit, starting at MLE, without calculating standard errors (to save time)
+#       fit_new = fit_model( "settings"=model$settings, 
+#                            "Lat_i"=model$data_frame[,'Lat_i'],
+#                            "Lon_i"=model$data_frame[,'Lon_i'], 
+#                            "t_i"=model$data_frame[,'t_i'],
+#                            "c_i"=model$data_frame[,'c_iz'], 
+#                            "b_i"=model$data_frame[,'b_i'],
+#                            "a_i"=model$data_frame[,'a_i'], 
+#                            "v_i"=model$data_frame[,'v_i'],
+#                            "PredTF_i"=PredTF_i, 
+#                            "Parameters"=model$ParHat, 
+#                            "getsd"=FALSE,
+#                            
+#                            working_dir = CrossvalidationDir,
+#                            
+#                            covariate_data = covariate_inp,
+#                            X1config_cp = X1config_cp,
+#                            X1_formula = X1_formula,
+#                            
+#                            catchability_data = catchability_cov_inp,
+#                            #Q1config_k = Q1config_k,
+#                            Q1_formula = Q1_formula,
+#                            
+#                            input_grid = input_grid,
+#                            
+#                            Use_REML = TRUE)
+#       
+#       saveRDS(fit_new, file.path(CrossvalidationDir, "Fit.rds"))
+#       
+#       # # Save fit to out-of-bag data
+#       # prednll_f[fI] = fit_new$Report$pred_jnll
+#       
+#       
+#       #Make predictions
+#       pred = fit_new$Report$R1_i #ALL prediction values
+#       pred = pred[Group_i==i] #predicted POC, For test data
+#       obs = observations[Group_i==i] #observed data, for test data
+#       
+#       mylist$predictions[[i]] <- pred #store predictions
+#       mylist$labels[[i]] <- obs #store test P/A
+#       mylist$RMSE[[i]] <- RMSE(m=pred,o=(as.numeric(as.logical(obs))))
+#       
+#     },
+#     error=function(e) e)
+#     
+#     browser()
+#     
+#     
+#      
+#     # #Build new one
+#     # TmbList = VAST::Build_TMB_Fn("TmbData"=Data, "Parameters"=parhat, ...)#, "Random"=NULL)
+#     # #TmbList = VAST::Build_TMB_Fn("TmbData"=Data, "Parameters"=parhat, "RunDir"=TmbDir, "Version"=Version, "loc_x"=loc_x, "RhoConfig"=RhoConfig, "TmbDir"=TmbDir, "Use_REML"=Use_REML) #, "Map"=Save$Map, "Random"=NULL)
+#     # 
+#     # #Extract objects
+#     # Obj = TmbList[["Obj"]]
+#     # TmbList[["Upper"]][grep("logkappa",names(TmbList[["Upper"]]))] = Inf
+#     # 
+#     # #Run model
+#     # #for(j in 1:2) Opt = nlminb(start=Obj$env$last.par.best[-Obj$env$random], objective=Obj$fn, gradient=Obj$gr, lower=TmbList[["Lower"]], upper=TmbList[["Upper"]], control=list(eval.max=1e5, iter.max=1e5, trace=1))  # , rel.tol=1e-20
+#     # Opt = TMBhelper::Optimize(obj=Obj, startpar =Obj$env$last.par.best[-Obj$env$random] , lower=TmbList[["Lower"]], upper=TmbList[["Upper"]], getsd=FALSE,
+#     #                           savedir=NULL, bias.correct=FALSE, newtonsteps = 3,
+#     #                           control = list(eval.max = 100000, iter.max = 100000 ,trace = TRUE))
+#     # Opt[["final_diagnostics"]] = data.frame( "Name"=names(Opt$par), "Lwr"=TmbList[["Lower"]], "Est"=Opt$par, "Upr"=TmbList[["Upper"]], "Gradient"=Obj$gr(Opt$par) )
+#     # 
+#     # #Reports
+#     # Report = Obj$report( Obj$env$last.par.best )
+#     # ParHat = Obj$env$parList(Opt$par)
+#     # 
+#     # #Save stuff
+#     # Save = list("Opt"=Opt, "Report"=Report, "ParHat"=ParHat, "TmbData"=Data, "Map"=TmbList$Map)
+#     # save(Save, file=paste0(CrossvalidationDir,"Save","_k",i,".RData"))
+#     # capture.output( Opt, file=paste0(CrossvalidationDir,"Opt.txt"))
+#     # 
+#     
+#   }
+#   
+#   pred <- prediction(mylist$predictions, mylist$labels) #format as a prediction object
+#   AUC <- performance(pred, "auc")@y.values #find and store AUC values
+#   AUC_ests <- ci.cvAUC(predictions = mylist$predictions, labels = mylist$labels) #find mean AUC, SE and 95CI's
+#   
+#   mylist$AUC = AUC
+#   mylist$AUC_ests = AUC_ests
+#   mylist$perf <- performance(pred,"tpr","fpr")
+#   
+#   # Return output
+#   return(mylist)
+# }
+
+RMSE = function(m, o){ #RMSE function
+  sqrt(mean((m - o)^2))
+} #where m=predicted values and o=observed values
+
+
+
+vif_func<-function(in_frame,thresh=10,trace=T,...){
+  
+  library(fmsb)
+  
+  if(any(!'data.frame' %in% class(in_frame))) in_frame<-data.frame(in_frame)
+  
+  #get initial vif value for all comparisons of variables
+  vif_init<-NULL
+  var_names <- names(in_frame)
+  for(val in var_names){
+    regressors <- var_names[-which(var_names == val)]
+    form <- paste(regressors, collapse = '+')
+    form_in <- formula(paste(val, '~', form))
+    vif_init<-rbind(vif_init, c(val, fmsb::VIF(lm(form_in, data = in_frame, ...))))
+  }
+  vif_max<-max(as.numeric(vif_init[,2]), na.rm = TRUE)
+  
+  if(vif_max < thresh){
+    if(trace==T){ #print output of each iteration
+      prmatrix(vif_init,collab=c('var','vif'),rowlab=rep('',nrow(vif_init)),quote=F)
+      cat('\n')
+      cat(paste('All variables have VIF < ', thresh,', max VIF ',round(vif_max,2), sep=''),'\n\n')
+    }
+    return(var_names)
+  }
+  else{
+    
+    in_dat<-in_frame
+    
+    #backwards selection of explanatory variables, stops when all VIF values are below 'thresh'
+    while(vif_max >= thresh){
+      
+      vif_vals<-NULL
+      var_names <- names(in_dat)
+      
+      for(val in var_names){
+        regressors <- var_names[-which(var_names == val)]
+        form <- paste(regressors, collapse = '+')
+        form_in <- formula(paste(val, '~', form))
+        vif_add<-fmsb::VIF(lm(form_in, data = in_dat, ...))
+        vif_vals<-rbind(vif_vals,c(val,vif_add))
+      }
+      max_row<-which(vif_vals[,2] == max(as.numeric(vif_vals[,2]), na.rm = TRUE))[1]
+      
+      vif_max<-as.numeric(vif_vals[max_row,2])
+      
+      if(vif_max<thresh) break
+      
+      
+      if(trace==T){ #print output of each iteration
+        prmatrix(vif_vals,collab=c('var','vif'),rowlab=rep('',nrow(vif_vals)),quote=F)
+        cat('\n')
+        cat('removed: ',vif_vals[max_row,1],vif_max,'\n\n')
+        flush.console()
+      }
+      
+      in_dat<-in_dat[,!names(in_dat) %in% vif_vals[max_row,1]]
+      
+    }
+    
+    return(names(in_dat))
+    
+  }
+  
+}
+
+TSS_func <- function(misc_table){
+  
+  TSS_list <- list()
+  
+  sn <- misc_table["1","1"] / (misc_table["1","1"] + misc_table["1","0"])
+  sp <- misc_table["0","0"] / (misc_table["0","0"] + misc_table["0","1"])
+  
+  TSS <- sn+sp-1
+  
+  TSS_list$TSS <- TSS
+  
+  N <- n <- misc_table["0","1"] + misc_table["0","0"] + misc_table["1","0"] + misc_table["1","1"]
+  P <- (misc_table["1","0"] + misc_table["1","1"])/n
+  
+  TSS_variance <- (sn*(1-sn)/N*P) + (sp*(1-sp)/N*(1-P))  
+  
+  TSS_list$TSS_SE <- sqrt(TSS_variance)
+  
+  TSS_lowerCI <- TSS - 1.96*sqrt(TSS_variance)
+  TSS_upperCI <- TSS + 1.96*sqrt(TSS_variance)
+  
+  TSS_list$CI <- c(TSS_lowerCI, TSS_upperCI)
+  
+  return(TSS_list)
+  
+}
+
+
+cv_func <- function(model, kfold=50, type, results_path, response_data, covariates, lat_lon_data, seed=22,
+                    other_VAST_data=NULL, VAST_model = NULL, input_grid = NULL,
+                    testing = FALSE, supercomputer = FALSE, supercomputer_fold = NULL,
+                    GRaF_rerun = FALSE, ...){
+  
+  library(RRF) #RRF pacakage
+  library(ROCR) #auc function
+  library(cvAUC) #auc CI's
+  library(sperrorest) #k-means spatial partitioning function
+  library(VAST)
+  library(GRaF)
+  
+  ##################
+  if(model == "RRF"){
+    
+    #Save results to list
+    save_list <- list()
+    
+    #Set species
+    species <- colnames(response_data)
+    
+    #Set Xvars
+    Xvars <- colnames(covariates)
+    
+    #Bind data
+    myExplanatoryFrame = cbind(response_data, covariates, lat_lon_data)
+    
+    #Path to save models
+    model_save_path <- file.path(results_path, "Models")
+    dir.create(model_save_path, showWarnings = F)
+    
+    
+    #####################
+    # Spatial partitioning
+    if(type == "spatial"){
+      spatial_par = partition_kmeans(myExplanatoryFrame, coords = c("lat", "long"), nfold = kfold, seed1 = 57,
+                                     balancing_steps = 100) #cluster the data into 50 clusters (folds)
+      
+      Group_i=rep(NA,nrow(myExplanatoryFrame)) #empty vector of size nrow(myExplanatoryFrame)
+      for(k in 1:kfold){ #loop to assign each observation a value between 1 and kfold depending on what fold the obs is in
+        Group_i[spatial_par[[1]][[k]]$test] = k
+      }
+      myExplanatoryFrame$Group_i = Group_i #bind SCV folds number to data
+    }
+    #####################
+    # Ordinary partioning
+    if(type=="ordinary"){
+      set.seed(2209)
+      Group_i = sample( x=1:kfold, size=nrow(myExplanatoryFrame), replace=TRUE)
+      myExplanatoryFrame$Group_i <- Group_i
+    }
+    #####################
+    # Perform cross validation
+    for(i in 1:kfold){
+    
+      #Print fold number
+      print(paste("RRF: FOLD = ", i)) 
+      
+      #Training dataset i.e. when Group_i does not equal i
+      train_df = subset(myExplanatoryFrame, Group_i!=i) 
+      train_df[[species]] = as.factor(train_df[[species]]) #specify the species as a factor
+      levels(train_df[[species]]) <- c("FALSE", "TRUE") #ensure the levels are F/T
+      
+      #Test data
+      test_df = subset(myExplanatoryFrame, Group_i==i) #test dataset
+      #test_df[[species]] = as.factor(test_df[[species]]) #specify the species as a factor
+      #levels(test_df[[species]]) <- c("FALSE", "TRUE") #ensure the levels are F/T
+      
+      #####################
+      if(testing == F){
+        #Set seed for consistancy
+        set.seed(seed) 
+        
+        #Run model
+        RRF_model <- RRF(y = train_df[, species], x = train_df[, Xvars], ntree=1000) #run modelling on training set
+        
+        ######################
+        # Save model
+        saveRDS(RRF_model, file.path(model_save_path, paste0("RRF_model_k",i, ".rds")))
+        
+        # Make and Save predictions
+        RRF_model_pred = predict(RRF_model, type = "prob", newdata= test_df[, Xvars]) #make predictions from RRF
+        saveRDS(RRF_model_pred, file.path(model_save_path, paste0("RRF_model_predictions_k",i, ".rds"))) # save predictions
+      }
+      #####################
+
+      if(testing == T){RRF_model_pred <- readRDS(file.path(model_save_path, paste0("RRF_model_predictions_k",i, ".rds")))}
+      
+      #browser()
+      
+      ## Issue arose where some spatial CV predictions were all zero
+      ## Need to coerce at least two to 1 so that AUC can be predicted
+      pa_predictions <- as.vector(RRF_model_pred[,"TRUE"])
+      
+      # if(sum(round(pa_predictions) > 0) <= 5){
+      #   
+      #   x = pa_predictions
+      #   
+      #   y = sort(x, decreasing = T)[1:5]
+      #   
+      #   x[x %in% y] = 1
+      #   
+      #   
+      #   pa_predictions <- x
+      #   
+      # }
+      
+      
+      ######################
+      # Add results to list
+      save_list$predictions[[i]] <- pa_predictions #store predictions
+      save_list$labels[[i]] <- test_df[,species]
+
+      #TSS
+      misc_table <- table(factor(save_list$labels[[i]]+0, levels = c(0,1)), factor(round(save_list$predictions[[i]]), levels = c(0,1))) #assumption is that >=0.5 = 1 and <0.5 = 0
+      save_list$TSS[[i]] <- TSS_func(misc_table = misc_table)
+      
+      #RMSE
+      save_list$RMSE[[i]] <- RMSE(m=save_list$predictions[[i]],o=(as.numeric(as.logical(save_list$labels[[i]]))))
+      
+      # ######################
+      # # Getting an error so make sure factor is specified
+      # save_list$labels[[i]] <- factor(save_list$labels[[i]]) #store test response data
+      # levels(save_list$labels[[i]]) <- c("FALSE", "TRUE") #ensure the levels are F/T
+      
+    }
+    
+    #browser()
+    
+    # Format predictions and test data as a predictions object
+    pred <- prediction(save_list$predictions, save_list$labels)
+    saveRDS(pred, file.path(results_path, "ROCR_formatted_preds.rds"))
+    #pred <- readRDS(file.path(results_path, "ROCR_formatted_preds.rds"))
+    
+    #Area under the receiver operator characteristic curve
+    AUC <- performance(pred, "auc")@y.values #find and store AUC values
+    AUC_ests <- ci.cvAUC(predictions = save_list$predictions, labels = save_list$labels) #mean AUC, SE and 95CI's
+    
+    
+    
+    #Save all results
+    cv_results <- list("Predictions"=save_list$predictions, "Observations"=save_list$labels, "TSS"=save_list$TSS,
+                               "RMSE"=save_list$RMSE, "AUC"=unlist(AUC), "pred.ests"=AUC_ests)
+    save(cv_results, file = file.path(results_path, "CV_results.RData"))
+    
+    return(cv_results)
+
+    
+  }
+  
+  ##################
+  if(model == "VAST"){
+    
+    #Save results to list
+    save_list <- list()
+    
+    #Set species
+    species <- colnames(response_data)
+    
+    #Set Xvars
+    Xvars <- colnames(covariates)
+    
+    #Bind data
+    myExplanatoryFrame = cbind(response_data, covariates, lat_lon_data, other_VAST_data)
+    
+    covariates <- cbind(Year=NA, Lat=lat_lon_data$lat, Lon=lat_lon_data$long, covariates)
+    
+    #Path to save models
+    model_save_path <- file.path(results_path, "Models")
+    dir.create(model_save_path, showWarnings = F)
+    
+    
+    
+    #####################
+    # Spatial partitioning
+    if(type == "spatial"){
+      spatial_par = partition_kmeans(myExplanatoryFrame, coords = c("lat", "long"), nfold = kfold, seed1 = 57,
+                                     balancing_steps = 100) #cluster the data into 50 clusters (folds)
+      
+      Group_i=rep(NA,nrow(myExplanatoryFrame)) #empty vector of size nrow(myExplanatoryFrame)
+      for(k in 1:kfold){ #loop to assign each observation a value between 1 and kfold depending on what fold the obs is in
+        Group_i[spatial_par[[1]][[k]]$test] = k
+      }
+      myExplanatoryFrame$Group_i = Group_i #bind SCV folds number to data
+    }
+    #####################
+    # Ordinary partioning
+    if(type=="ordinary"){
+      set.seed(2209)
+      Group_i = sample( x=1:kfold, size=nrow(myExplanatoryFrame), replace=TRUE)
+      myExplanatoryFrame$Group_i <- Group_i
+    }
+    #####################
+    
+    save(Group_i, file=file.path(results_path,"Group_i.RData"))
+    
+    #####################
+    #Model settings
+    
+    
+    # Perform cross validation
+    if(supercomputer == FALSE){
+      
+      for(i in 1:kfold){
+      #for(i in 1){  #Testing
+        print(paste("VAST: FOLD = ", i))
+        
+        #Directory
+        CrossvalidationDir = file.path(model_save_path, paste0("k",i))
+        dir.create(CrossvalidationDir)
+        
+        PredTF_i = ifelse(Group_i==i, 1, 0)
+        
+        #browser()
+        
+        tryCatch({
+          
+          # Refit, starting at MLE, without calculating standard errors (to save time)
+          fit_new = fit_model( "settings"=VAST_model$settings,
+                               "Lat_i"=myExplanatoryFrame$lat,
+                               "Lon_i"=myExplanatoryFrame$long,
+                               "t_i"=myExplanatoryFrame$Year,
+                               "c_i"=as.numeric(myExplanatoryFrame$Category)-1,
+                               "b_i"=myExplanatoryFrame[,species],
+                               "a_i"=myExplanatoryFrame$Areaswept,
+                               "PredTF_i"=PredTF_i,
+                               "Parameters"=VAST_model$ParHat,
+                               "getsd"=FALSE,
+                               
+                               working_dir = CrossvalidationDir,
+                               
+                               covariate_data = covariates,
+                               X1config_cp = VAST_model$X1config_cp,
+                               X1_formula = VAST_model$X1_formula,
+                               
+                               catchability_data = data.frame("Gear" = myExplanatoryFrame$Gear),
+                               #Q1config_k = Q1config_k,
+                               Q1_formula = VAST_model$Q1_formula,
+                               
+                               input_grid = input_grid,
+                               
+                               Use_REML = TRUE)
+          
+          saveRDS(fit_new, file.path(CrossvalidationDir, "Fit.rds"))
+          
+          # # Save fit to out-of-bag data
+          # prednll_f[fI] = fit_new$Report$pred_jnll
+          
+          
+          #Make predictions
+          pred = fit_new$Report$R1_i #ALL prediction values
+          pred = pred[Group_i==i] #predicted POC, For test data
+          obs = round(myExplanatoryFrame[Group_i==i,species]) #observed data, for test data
+          
+          #Save 
+          save_list$predictions[[i]] <- pred #store predictions
+          save_list$labels[[i]] <- obs #store test P/A
+          
+          
+          #TSS
+          misc_table <- table(factor(save_list$labels[[i]]+0, levels = c(0,1)), factor(round(save_list$predictions[[i]]), levels = c(0,1))) #assumption is that >=0.5 = 1 and <0.5 = 0
+          save_list$TSS[[i]] <- TSS_func(misc_table = misc_table)
+          
+          #RMSE
+          save_list$RMSE[[i]] <- RMSE(m=save_list$predictions[[i]],o=(as.numeric(as.logical(save_list$labels[[i]]))))
+          
+          ######################
+          # Getting an error so make sure factor is specified
+          save_list$labels[[i]] <- factor(save_list$labels[[i]]) #store test response data
+          levels(save_list$labels[[i]]) <- c("FALSE", "TRUE") #ensure the levels are F/T
+          
+        },
+        error=function(e) e)
+      }
+      
+      
+      # Format predictions and test data as a predictions object
+      pred <- prediction(save_list$predictions, save_list$labels)
+      saveRDS(pred, file.path(results_path, "ROCR_formatted_preds.rds"))
+      #pred <- readRDS(file.path(results_path, "ROCR_formatted_preds.rds"))
+      
+      #Area under the receiver operator characteristic curve
+      AUC <- performance(pred, "auc")@y.values #find and store AUC values
+      AUC_ests <- ci.cvAUC(predictions = save_list$predictions, labels = save_list$labels) #mean AUC, SE and 95CI's
+      
+      
+      
+      #Save all results
+      cv_results <- list("Predictions"=save_list$predictions, "Observations"=save_list$labels, "TSS"=save_list$TSS,
+                         "RMSE"=save_list$RMSE, "AUC"=unlist(AUC), "pred.ests"=AUC_ests)
+      save(cv_results, file = file.path(results_path, "CV_results.RData"))
+      
+      return(cv_results)
+      
+    }
+    
+    if(supercomputer == TRUE){
+      
+      print(paste("VAST: FOLD = ", supercomputer_fold))
+      
+      #Directory
+      CrossvalidationDir = file.path(model_save_path, paste0("k",supercomputer_fold))
+      dir.create(CrossvalidationDir, showWarnings = F)
+      
+      PredTF_i = ifelse(Group_i==supercomputer_fold, 1, 0)
+      
+      # Refit, starting at MLE, without calculating standard errors (to save time)
+      #VAST_model$settings$Version <- "VAST_v14_0_1" #testing
+      
+        fit_new = fit_model( "settings"=VAST_model$settings,
+                             "Lat_i"=myExplanatoryFrame$lat,
+                             "Lon_i"=myExplanatoryFrame$long,
+                             "t_i"=myExplanatoryFrame$Year,
+                             "c_i"=as.numeric(myExplanatoryFrame$Category)-1,
+                             "b_i"=myExplanatoryFrame[,species],
+                             "a_i"=myExplanatoryFrame$Areaswept,
+                             "PredTF_i"=PredTF_i,
+                             "Parameters"=VAST_model$ParHat,
+                             "getsd"=FALSE,
+                             
+                             working_dir = CrossvalidationDir,
+                             
+                             covariate_data = covariates,
+                             X1config_cp = VAST_model$X1config_cp,
+                             X1_formula = VAST_model$X1_formula,
+                             
+                             catchability_data = data.frame("Gear" = myExplanatoryFrame$Gear),
+                             #Q1config_k = Q1config_k,
+                             Q1_formula = VAST_model$Q1_formula,
+                             
+                             input_grid = input_grid,
+                             
+                             Use_REML = TRUE)
+        
+        saveRDS(fit_new, file.path(CrossvalidationDir, "Fit.rds"))
+        
+        # # Save fit to out-of-bag data
+        # prednll_f[fI] = fit_new$Report$pred_jnll
+        
+        
+        #Make predictions
+        pred = fit_new$Report$R1_i #ALL prediction values
+        pred = pred[Group_i==supercomputer_fold] #predicted POC, For test data
+        obs = round(myExplanatoryFrame[Group_i==supercomputer_fold,species]) #observed data, for test data
+        
+        #Save 
+        save_list$predictions <- pred #store predictions
+        save_list$labels <- obs #store test P/A
+        
+        
+        #TSS
+        misc_table <- table(factor(save_list$labels+0, levels = c(0,1)), factor(round(save_list$predictions), levels = c(0,1))) #assumption is that >=0.5 = 1 and <0.5 = 0
+        save_list$TSS <- TSS_func(misc_table = misc_table)
+        
+        #RMSE
+        save_list$RMSE <- RMSE(m=save_list$predictions,o=(as.numeric(as.logical(save_list$labels))))
+        
+        #Save results
+        save(save_list, file = file.path(CrossvalidationDir, "save_list.RData"))
+        
+        return(save_list)
+    }
+    
+    
+  }
+  
+  ##################
+  if(model == "GRaF"){
+    
+    if(GRaF_rerun == FALSE){
+      #Save results to list
+      save_list <- list()
+      
+      #Set species
+      species <- colnames(response_data)
+      
+      #Set Xvars
+      Xvars <- colnames(covariates)
+      
+      #Bind data
+      myExplanatoryFrame = cbind(response_data, covariates, lat_lon_data)
+      
+      #Path to save models
+      model_save_path <- file.path(results_path, "Models")
+      dir.create(model_save_path, showWarnings = F)
+      
+      
+      #####################
+      # Ordinary partioning
+      if(type=="ordinary"){
+        set.seed(2209)
+        Group_i = sample( x=1:kfold, size=nrow(myExplanatoryFrame), replace=TRUE)
+        myExplanatoryFrame$Group_i <- Group_i
+      }
+      #####################
+      
+      save(Group_i, file=file.path(results_path,"Group_i.RData"))
+      
+      #####################
+      
+      print(paste("GRaF: FOLD = ", supercomputer_fold))
+      
+      #Directory
+      CrossvalidationDir = file.path(model_save_path, paste0("k",supercomputer_fold))
+      dir.create(CrossvalidationDir, showWarnings = F)
+      
+      
+      ## Set the training and test data:
+      #Training dataset i.e. when Group_i does not equal i
+      train_df = subset(myExplanatoryFrame, Group_i!=supercomputer_fold)
+      train_df[,species] = as.numeric(as.logical(train_df[,species]))
+      
+      #Test data
+      test_df = subset(myExplanatoryFrame, Group_i==supercomputer_fold) #test dataset
+      
+      #browser()
+      
+      #Run model
+      set.seed(seed)
+      graf_model <- graf(y=train_df[,species], x=train_df[, Xvars], opt.l = TRUE, prior = NULL,verbose = TRUE) #with uninformative prior
+      #graf_model <- graf(y=train_df[c(1:100),species], x=train_df[c(1:100), Xvars], opt.l = TRUE, prior = NULL,verbose = TRUE) #testing
+      
+      saveRDS(graf_model, file.path(CrossvalidationDir, "GRaF_model.rds"))
+      
+      
+      # Make and Save predictions
+      graf_model_pred <- predict.graf_v2(graf_model, newdata= test_df[, Xvars])
+      saveRDS(graf_model_pred, file.path(model_save_path, paste0("GRaF_model_predictions.rds")))
+      
+      
+      #Save 
+      save_list$predictions <- graf_model_pred #store predictions
+      save_list$labels <- test_df[,species] #store test P/A
+      
+      #TSS
+      misc_table <- table(factor(save_list$labels+0, levels = c(0,1)), factor(round(save_list$predictions[,1]), levels = c(0,1))) #assumption is that >=0.5 = 1 and <0.5 = 0
+      save_list$TSS <- TSS_func(misc_table = misc_table)
+      
+      #RMSE
+      save_list$RMSE <- RMSE(m=save_list$predictions[,1],o=(as.numeric(as.logical(save_list$labels))))
+      
+      #Save results
+      save(save_list, file = file.path(CrossvalidationDir, "save_list.RData"))
+      
+      return(save_list)
+    }
+    
+    if(GRaF_rerun == TRUE){
+      
+      #Save results to list
+      save_list <- list()
+      
+      #Set species
+      species <- colnames(response_data)
+      
+      #Set Xvars
+      Xvars <- colnames(covariates)
+      
+      #Bind data
+      myExplanatoryFrame = cbind(response_data, covariates, lat_lon_data)
+      
+      #Path to save models
+      model_save_path <- file.path(results_path, "Models")
+      dir.create(model_save_path, showWarnings = F)
+      
+      
+      #####################
+      # Ordinary partioning
+      if(type=="ordinary"){
+        set.seed(2209)
+        Group_i = sample( x=1:kfold, size=nrow(myExplanatoryFrame), replace=TRUE)
+        myExplanatoryFrame$Group_i <- Group_i
+      }
+      #####################
+      
+      save(Group_i, file=file.path(results_path,"Group_i.RData"))
+      
+      #####################
+      
+      print(paste("GRaF: FOLD = ", supercomputer_fold))
+      
+      #Directory
+      CrossvalidationDir = file.path(model_save_path, paste0("k",supercomputer_fold))
+      dir.create(CrossvalidationDir, showWarnings = F)
+      
+      
+      ## Set the training and test data:
+      #Training dataset i.e. when Group_i does not equal i
+      train_df = subset(myExplanatoryFrame, Group_i!=supercomputer_fold)
+      train_df[,species] = as.numeric(as.logical(train_df[,species]))
+      
+      #Test data
+      test_df = subset(myExplanatoryFrame, Group_i==supercomputer_fold) #test dataset
+      
+      #browser()
+      
+      #Run model
+      set.seed(seed)
+      #graf_model <- graf(y=train_df[,species], x=train_df[, Xvars], opt.l = TRUE, prior = NULL,verbose = TRUE) #with uninformative prior
+      
+      #saveRDS(graf_model, file.path(CrossvalidationDir, "GRaF_model.rds"))
+      
+      graf_model <- readRDS(file.path(CrossvalidationDir, "GRaF_model.rds"))
+      
+      
+      # Make and Save predictions
+      graf_model_pred <- predict.graf_v2(graf_model, newdata= test_df[, Xvars])
+      saveRDS(graf_model_pred, file.path(model_save_path, paste0("GRaF_model_predictions.rds")))
+      
+      
+      #Save 
+      save_list$predictions <- graf_model_pred #store predictions
+      save_list$labels <- test_df[,species] #store test P/A
+      
+      #TSS
+      misc_table <- table(factor(save_list$labels+0, levels = c(0,1)), factor(round(save_list$predictions[,1]), levels = c(0,1))) #assumption is that >=0.5 = 1 and <0.5 = 0
+      save_list$TSS <- TSS_func(misc_table = misc_table)
+      
+      #RMSE
+      save_list$RMSE <- RMSE(m=save_list$predictions[,1],o=(as.numeric(as.logical(save_list$labels))))
+      
+      #Save results
+      save(save_list, file = file.path(CrossvalidationDir, "save_list.RData"))
+      
+      return(save_list)
+      
+    }
+    
+  }
+  
+  
+  
+}
+
+
+
+
+
+
+
+
+
+#######################################
+#######################################
+
+# GRaF predicting functions:
+
+predict.graf_v2 <-
+  function(object, newdata = NULL, type = c('response', 'latent'),
+           CI = 0.95, maxn = NULL, ...) {
+    
+    if (class(newdata) %in% c('Raster', 'RasterBrick', 'RasterStack')) {
+      
+      # predict to a raster
+      ans <- predict.graf.raster(object = object,
+                                 x = newdata,
+                                 type = type,
+                                 CI = CI,
+                                 maxn = maxn,
+                                 ...)
+      
+      return (ans)
+      
+    }
+    
+    type = match.arg(type)
+    if (is.null(maxn)) maxn <- round(nrow(object$x) / 10)
+    # set up data
+    if (is.null(newdata)) {
+      # use already set up inference data if not specified
+      newdata <- object$x
+      # get mean on raw data
+      mn <- object$mnfun(object$obsx)
+      
+    } else {
+      # convert any ints to numerics
+      for(i in 1:ncol(newdata)) if (is.integer(newdata[, i])) newdata[, i] <- as.numeric(newdata[, i])
+      
+      if (is.data.frame(newdata) & all(sapply(object$obsx, class) == sapply(newdata, class))) {
+        
+        # get mean on raw data
+        mn <- object$mnfun(newdata)
+        
+        k <- ncol(newdata)
+        # numericize factors
+        for (fac in object$facs) {
+          newdata[, fac] <- as.numeric(newdata[, fac])
+        }
+        # convert to a matrix
+        newdata <- as.matrix(newdata)
+        # scale, if needed
+        if (!is.null(object$scaling)) {
+          notfacs <- (1:k)
+          if(length(object$facs) > 0) notfacs <- notfacs[-object$facs]
+          for(i in 1:length(notfacs)) {
+            newdata[, notfacs[i]] <- (newdata[, notfacs[i]] - object$scaling[1, i]) / object$	scaling[2, i]
+          }
+        }
+      } else {
+        stop('newdata must be either a dataframe with the same elements as used for inference, or NULL')
+      }
+    }
+    
+    # check CI
+    if (!is.null(CI)) {
+      if (!(CI == 'std' & type == 'latent')) {
+        if (CI >= 1 | CI <= 0) {
+          stop("CI must be a number between 0 and 1, or NULL")
+        }
+        err <- qnorm( 1 - (1 - CI) / 2 )
+      }
+    }
+    # latent case
+    if (type == 'latent') {
+      
+      if (is.null(CI)) {
+        # if CIs aren't wanted
+        ans <- pred_v2(newdata, object, mn, std = FALSE, maxn = maxn)
+        colnames(ans) <- "posterior mean"
+      } else if (CI == 'std') { # if standard deviations are wanted instead
+        ans <- pred_v2(newdata, object, mn, std = TRUE, maxn = maxn)
+        colnames(ans) <- c("posterior mean", "posterior std")
+      } else {
+        # if they are
+        pred <- pred_v2(newdata, object, mn, std = TRUE, maxn = maxn)
+        upper <- pred[, 1] + err * pred[, 2]
+        lower <- pred[, 1] - err * pred[, 2]
+        ans <- cbind(pred[, 1], lower, upper)
+        colnames(ans) <- c("posterior mean", paste("lower ", round(100 * CI), "% CI", sep = ""),
+                           paste("upper ", round(100 * CI), "% CI", sep = ""))
+      }
+    } else {
+      # response case
+      if (is.null(CI)) {
+        # if CIs aren't required
+        ans <- pnorm(pred_v2(newdata, object, mn, std = FALSE, maxn = maxn))
+        colnames(ans) <- "posterior mode"
+      } else {
+        # if CIs are required
+        pred <- pred_v2(newdata, object, mn, std = TRUE, maxn = maxn)
+        upper <- pred[, 1] + err * pred[, 2]
+        lower <- pred[, 1] - err * pred[, 2]
+        ans <- pnorm(cbind(pred[, 1], lower, upper))
+        colnames(ans) <- c("posterior mode", paste("lower ", round(100 * CI), "% CI", sep = ""),
+                           paste("upper ", round(100 * CI), "% CI", sep = ""))
+      }
+    }
+    ans
+  }
+
+
+pred_v2 <-
+  function(predx, fit, mn, std = TRUE, maxn = 250, same = FALSE) {
+    predx <- as.matrix(predx)
+    n <- nrow(predx)  
+    if (n > maxn & !same) {
+      inds <- split(1:n, ceiling((1:n) / maxn))
+      fun <- function(ind, X, fit, std, maxn) {
+        pred_v2(X[ind, , drop = FALSE], fit, mn[ind], std, maxn, same)
+      }    
+      prediction <- lapply(inds, fun, predx, fit, std, maxn)
+      prediction <- do.call('rbind', prediction)
+    } else {
+      if(same) {
+        # if predicting back to input data re-use covariance matrix
+        Kx <- fit$K
+        prediction <- fit$MAP
+      } else {
+        Kx <- cov.SE_v2(fit$x, predx, e1 = fit$e, l = fit$ls)
+        mpred <- qnorm(mn)
+        prediction <- crossprod(Kx, fit$a) + mpred
+      }
+      
+      if (std) {
+        v <- backsolve(fit$L, sqrt(as.vector(fit$W)) * Kx, transpose = T)
+        # using correlation matrix, so diag(kxx) is all 1s, no need to compute kxx
+        predvar <- 1 - crossprod(v)
+        prediction <- cbind(prediction, sqrt(diag(predvar)))
+        colnames(prediction) <- c("MAP", "std")
+      }
+    }
+    prediction
+  }
+
+cov.SE_v2 <- function(x1, x2 = NULL, e1 = NULL, e2 = NULL, l) {
+  n1 <- nrow(x1)
+  n2 <- ifelse(is.null(x2), n1, nrow(x2))
+  n3 <- ncol(x1)
+  
+  # distance matrices
+  if(is.null(x2)) {
+    e2 <- e1
+    # if no second matrix do with distance matrices for speed up
+    dists <- lapply(1:n3, function(i, x) dist(x[, i]) ^ 2, x1)
+  } else {
+    dists <- list()
+    for (i in 1:n3) {
+      dists[[i]] <-   x1[, i] ^ 2 %*% t(rep(1, n2)) +
+        rep(1, n1) %*% t(x2[, i] ^ 2) - 2 * x1[, i] %*% t(x2[, i])
+    }
+  }
+  
+  # with error matrices
+  if (!is.null(e1)) {
+    E1 <- list()
+    ones <- t(rep(1, n2))
+    for (i in 1:n3) {
+      E1[[i]] <- e1[, i] %*% ones
+    }
+    
+    if (!is.null(e2)) {
+      E2 <- list()
+      ones <- t(rep(1, n1))
+      for (i in 1:n3) {
+        E2[[i]] <- t(e2[, i] %*% ones)
+      }
+    } else {
+      E2 <- as.list(rep(0, n3))
+    }
+    
+    # run through each covariate
+    
+    sumdiffs <- 0
+    denom <- 1
+    lower <- lower.tri(E1[[1]])
+    for (i in 1:n3) {
+      err <- E1[[i]] + E2[[i]]
+      if (is.null(x2)) {
+        err <- err[lower] # save only lower portion for speed up
+      }
+      sumdiffs <- sumdiffs + dists[[i]] / (err + l[i])
+      denom <- denom * (1 + err / l[i])
+    }
+    # inverse kronecker delta
+    ikds <- as.numeric(sumdiffs > 0)
+    diag(ikds <- 1)
+    denom <- sqrt(denom) * ikds
+    K <- exp(-0.5 * sumdiffs) / denom
+    
+  } else {
+    # without error matrices
+    sumdiffs <- 0
+    for (i in 1:n3) {
+      sumdiffs <- sumdiffs + dists[[i]] / l[i]
+    }
+    K <- exp(-0.5 * sumdiffs)  # to matrix?
+  }
+  
+  if(any(class(sumdiffs) %in% 'dist')) {
+    K <- as.matrix(K)
+    diag(K) <- 1
+  }
+  K
+}
+
+
+
+
+
+
+
