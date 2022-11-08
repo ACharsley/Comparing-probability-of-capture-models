@@ -102,22 +102,30 @@ pander::pandoc.table( Data_Geostat[1:6,], digits=6 ) #table of the first 6 obser
 #######################
 
 #Load table with all covariates
-diad.preds <- read_xlsx(file.path(data_path, "Predictor Table_edited.xlsx"))
-
-#Set variables
-Xvars <- diad.preds$Abbreviation
+diad.preds <- read.csv(file.path(data_path, "Predictor_Table_final.csv"))
+Xvars <- diad.preds$Abbreviation[diad.preds$VIF_vars_to_keep == "Keep"]
 Xvars <- as.character(Xvars) #set as a character
-Xvars <- Xvars[!(Xvars=="REC1_rclabel")]
+
+# diad.preds <- read_xlsx(file.path(data_path, "Predictor Table_edited.xlsx"))
+# 
+# #Set variables
+# Xvars <- diad.preds$Abbreviation
+# Xvars <- as.character(Xvars) #set as a character
+# Xvars <- Xvars[!(Xvars=="REC1_rclabel")]
 
 #Create matrix of the covariates
 Cov_ep = as.matrix(NZFFD.REC2.Diad.EF[,Xvars])
 
-#Select covariates to use
-diad.gini = read.csv(file.path(RRF_path, "Gini_scores.csv")) #covariates selected by the RRF to use
-dontinclude_covs = diad.gini[diad.gini[,"angdie"] == 0 , 1] #the variables not to include (considering lf variables only)
 
-dontinclude_covs = match(dontinclude_covs, colnames(Cov_ep)) #match with Cov_ep
-Cov_ep = Cov_ep[,-dontinclude_covs] #Disregard
+#Will exclude the correct variable per species
+
+# #Select covariates to use
+# diad.gini = read.csv(file.path(RRF_path, "Gini_scores.csv")) #covariates selected by the RRF to use
+# dontinclude_covs = diad.gini[diad.gini[,"angdie"] == 0 , 1] #the variables not to include (considering lf variables only)
+# 
+# dontinclude_covs = match(dontinclude_covs, colnames(Cov_ep)) #match with Cov_ep
+# Cov_ep = Cov_ep[,-dontinclude_covs] #Disregard
+
 
 #Standardise covariates and format for covariate input- new analysis
 hab_std <- apply(Cov_ep, 2, function(x){(x - mean(x))/sd(x)})
@@ -125,7 +133,7 @@ hab_std <- apply(Cov_ep, 2, function(x){(x - mean(x))/sd(x)})
 hab_std <- cbind(Year=NA, Lat=NZFFD.REC2.Diad.EF$lat, Lon=NZFFD.REC2.Diad.EF$long, hab_std)
 
 
-rm(dontinclude_covs) ; rm(Cov_ep) ; rm(diad.preds) #remove as we no longer need this
+rm(Cov_ep) #remove as we no longer need this
 
 ## Save inputs
 save.image(file.path(ms_path, "VAST_inputs_ms.Rdata"))
@@ -162,7 +170,18 @@ covariate_inp <- data.frame(hab_std)
 n_p <- ncol(covariate_inp[,-c(1:3)])
 covar_names <- colnames(covariate_inp[,-c(1:3)])
 
-X1config_cp <- array(1, dim = c(2,n_p)) #all turned on, will use all selected lf covs for lfs and sfs
+# #Select covariates to use
+diad.gini = read.csv(file.path(RRF_path, "Gini_scores.csv")) #covariates selected by the RRF to use
+
+dontinclude_lf = diad.gini[diad.gini[,"angdie"] == 0 , 1] #the variables not to include
+dontinclude_sf = diad.gini[diad.gini[,"angaus"] == 0 , 1] #the variables not to include
+
+X1config_cp <- array(1, dim = c(2,n_p)) #all turned on
+
+# Exclude these ones
+X1config_cp[1,which(covar_names %in% dontinclude_lf)] <- 0
+X1config_cp[1,which(covar_names %in% dontinclude_sf)] <- 0
+
 X1_formula <- paste0("~",(paste0(covar_names, collapse = "+"))) # a symbolic description of the model to be fitted
 
 #Catchability covariates
@@ -179,7 +198,8 @@ Version="VAST_v13_1_0" #version of VAST used in updated analysis (May 2022)
 #Region
 Region="Other" #Region = "Other" in master's analysis, may try "user"
 
-FieldConfig <-  c("Omega1" = 1, "Epsilon1" = 1, "Omega2" = 0, "Epsilon2" = 0)
+#FieldConfig <-  c("Omega1" = 1, "Epsilon1" = 1, "Omega2" = 0, "Epsilon2" = 0)
+FieldConfig <-  c("Omega1" = 2, "Epsilon1" = 2, "Omega2" = 0, "Epsilon2" = 0)
 RhoConfig <- c("Beta1" = 2, "Beta2" = 3, "Epsilon1" = 0, "Epsilon2" = 0) #Beta2 is a constant intercept and Beta1 is a random walk
 
 ObsModel=c(2,0) #conventional delta model
@@ -400,4 +420,11 @@ plotting_data <- plot_nz_maps(plot_set = 1,
                            mar = c(2,3,2,2)
                            )
 
+
+
+####
+# # Calculate covariance
+# calc_cov(L_z = fit$parameter_estimates$SD$par.fixed[names(fit$parameter_estimates$SD$par.fixed) %in% c("L_omega1_z", "L_epsilon1_z", "L_beta1_z")],
+#          n_f = 1,
+#          n_c = 2)
 
