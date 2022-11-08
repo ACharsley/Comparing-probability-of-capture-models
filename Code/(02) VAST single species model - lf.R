@@ -75,12 +75,16 @@ pander::pandoc.table( Data_Geostat[1:6,], digits=6 ) #table of the first 6 obser
 #######################
 
 #Load table with all covariates
-diad.preds <- read_xlsx(file.path(data_path, "Predictor Table_edited.xlsx"))
-
-#Set variables
-Xvars <- diad.preds$Abbreviation
+diad.preds <- read.csv(file.path(data_path, "Predictor_Table_final.csv"))
+Xvars <- diad.preds$Abbreviation[diad.preds$VIF_vars_to_keep == "Keep"]
 Xvars <- as.character(Xvars) #set as a character
-Xvars <- Xvars[!(Xvars=="REC1_rclabel")]
+
+# diad.preds <- read_xlsx(file.path(data_path, "Predictor Table_edited.xlsx"))
+# 
+# #Set variables
+# Xvars <- diad.preds$Abbreviation
+# Xvars <- as.character(Xvars) #set as a character
+# Xvars <- Xvars[!(Xvars=="REC1_rclabel")]
 
 #Create matrix of the covariates
 Cov_ep = as.matrix(NZFFD.REC2.Diad.EF[,Xvars]) 
@@ -104,8 +108,126 @@ rm(dontinclude_covs) ; rm(Cov_ep) ; rm(diad.preds) #remove as we no longer need 
 save.image(file.path(lf_path, "VAST_inputs_lf.Rdata"))
 
 
+###############
+###############
+#   NZ Maps   #
+###############
+###############
+
+rm(list=ls())
+
+load(file.path(getwd(), "Output/VAST_lf/VAST_inputs_lf.Rdata"))
+
+
+###########
+# Tables
+
+table(Data_Geostat$Gear, round(Data_Geostat$Year))
+
+###########
+# Data maps
+
+# Network data
+netfull <- readRDS(file.path(data_path, "NZ_network.rds"))
+
+#New Zealand map
+nzmap <- ggplot(netfull) +
+  geom_point(aes(x = long, y = lat), cex=0.2) +
+  xlab("Longitude (°E)") + ylab("Latitude (°N)") +
+  theme_bw(base_size = 14)
+
+#Plotting data
+plot_data <- Data_Geostat %>% mutate(p_a = ifelse(Catch_KG > 0, "Presence", "Absence"))
+
+#Add yearly data to NZ map
+map <- nzmap +
+  geom_point(data=plot_data, aes(x = Lon, y = Lat, col = p_a), pch=19, alpha=0.6) +
+  facet_wrap(.~Year) +
+  xlab("Longitude (°E)") + ylab("Latitude (°N)") +
+  #ggtitle("Encounter/non-encounter longfin eel electric fishing observations") +
+  guides(col = guide_legend(title = "")) +
+  scale_colour_manual(values = c("#377EB8", "#E41A1C")) +
+  coord_fixed(1.1) +
+  theme_bw(base_size = 14) +
+  theme(axis.text = element_text(size = rel(0.5)),
+        axis.text.x = element_text(angle = 90))
+ggsave(file.path(figs_path, "NZ_map_with_obs_eachyear_lf.png"), map)
+
+
+
+#NZ map coloured by organisation
+map <- nzmap +
+  geom_point(data=plot_data, aes(x = Lon, y = Lat, col = Gear), pch=19, alpha=0.6) +
+  #facet_wrap(.~Year) +
+  xlab("Longitude (°E)") + ylab("Latitude (°N)") +
+  #ggtitle("Encounter/non-encounter longfin eel electric fishing observations") +
+  guides(col = guide_legend(title = "")) +
+  #scale_colour_manual(values = c("#377EB8", "#E41A1C")) +
+  coord_fixed(1.1) +
+  theme_bw(base_size = 14) +
+  theme(axis.text = element_text(size = rel(0.5)),
+        axis.text.x = element_text(angle = 90))
+ggsave(file.path(figs_path, "NZ_map_organisation_lf.png"), map)
+
+#Yearly NZ map coloured by organisation
+map <- nzmap +
+  geom_point(data=plot_data, aes(x = Lon, y = Lat, col = Gear), pch=19, alpha=0.6) +
+  facet_wrap(.~Year) +
+  xlab("Longitude (°E)") + ylab("Latitude (°N)") +
+  #ggtitle("Encounter/non-encounter longfin eel electric fishing observations") +
+  guides(col = guide_legend(title = "")) +
+  #scale_colour_manual(values = c("#377EB8", "#E41A1C")) +
+  coord_fixed(1.1) +
+  theme_bw(base_size = 14) +
+  theme(axis.text = element_text(size = rel(0.5)),
+        axis.text.x = element_text(angle = 90))
+ggsave(file.path(figs_path, "NZ_map_organisation_eachyear_lf.png"), map)
+
+
+###########
+# 6 by 6 map grid
+plot_data$Decade <-  ifelse(plot_data$Year >= 1974 & plot_data$Year <= 1979, "1974-1979",
+                            ifelse(plot_data$Year >= 1980 & plot_data$Year <= 1984, "1980-1984",
+                            ifelse(plot_data$Year >= 1985 & plot_data$Year <= 1989, "1985-1989", 
+                                          ifelse(plot_data$Year >= 1990 & plot_data$Year <= 1994, "1990-1994",
+                                          ifelse(plot_data$Year >= 1995 & plot_data$Year <= 1999, "1995-1999", 
+                                                 ifelse(plot_data$Year >= 2000 & plot_data$Year <= 2004, "2000-2004",
+                                                 ifelse(plot_data$Year >= 2005 & plot_data$Year <= 2009, "2005-2009", 
+                                                        ifelse(plot_data$Year >= 2010 & plot_data$Year <= 2014, "2010-2014", NA)))))
+                            )))
+
+
+table(plot_data$p_a ,plot_data$Decade, useNA = "ifany")
+
+decade <- unique(plot_data$Decade)
+tab <- table(plot_data$p_a ,plot_data$Decade, useNA = "ifany")
+
+data_text <- data.frame("Decade"= decade, label=paste0(tab[2,], "/", tab[1,]), 
+                        x=169, y=-36)
+
+map2 <- nzmap +
+  geom_point(data=plot_data, aes(x = Lon, y = Lat, col = p_a), pch=19, alpha=0.6) +
+  facet_wrap(.~Decade) +
+  xlab("Longitude (°E)") + ylab("Latitude (°N)") +
+  #ggtitle("Encounter/non-encounter longfin eel electric fishing observations") +
+  guides(col = guide_legend(title = "")) +
+  scale_colour_manual(values = c("#377EB8", "#E41A1C")) +
+  coord_fixed(1.1) +
+  theme_bw(base_size = 14) +
+  theme(axis.text = element_text(size = rel(0.5)),
+        axis.text.x = element_text(angle = 90))
+
+map2 <- map2 + geom_text(
+  data = data_text,
+  mapping = aes(x = x, y = y, label = label)
+)
+
+ggsave(file.path(figs_path, "NZ_map_by_decade_lf.png"), map2)
+
 ######################################### 
 ######################################### 
+
+
 
 ######################################### 
 #     PART 2 - Build model settings     #
@@ -228,6 +350,8 @@ Map <- fit0$tmb_list$Map
 input_grid <- data.frame("Lon" = fit0$extrapolation_list$Data_Extrap[,"Lon"], 
                          "Lat" = fit0$extrapolation_list$Data_Extrap[,"Lat"],
                          "Area_km2" = as.vector(fit0$extrapolation_list$Area_km2_x))
+save(input_grid, file=file.path(path, "input_grid.RData"))
+
 settings$Region <- "user"
 
 ## fit1 - check if the model parameters are identifiable.
@@ -360,7 +484,7 @@ plotting_data <- plot_maps(plot_set = 1,
                            cex.legend = 1,
                            legend_digits = 0.6,
                            zlim=c(0,1),
-                           outermargintext = c("Longitude (Â°E)","Latitude (Â°N)")
+                           outermargintext = c("Longitude (°E)","Latitude (°N)")
                            )
 
 years_to_plot <- c(1:dim(plotting_data)[2])
@@ -380,7 +504,7 @@ plot_variable_NZ_map( Y_gt = plotting_data[,years_to_plot,drop=FALSE],
                       cex.legend = 1,
                       legend_digits = 0.6,
                       zlim=c(0,1),
-                      outermargintext = c("Longitude (Â°E)","Latitude (Â°N)"),
+                      outermargintext = c("Longitude (°E)","Latitude (°N)"),
                       mar = c(2,3,2,2))
 
 
@@ -410,7 +534,7 @@ for( tI in years_to_plot){
                              cex.legend = 1,
                              legend_digits = 0.6,
                              zlim=c(0,1),
-                             outermargintext = c("Longitude (Â°E)","Latitude (Â°N)"),
+                             outermargintext = c("Longitude (°E)","Latitude (°N)"),
                              mar = c(0,0,2,2))
 }
 
@@ -434,7 +558,7 @@ for( tI in years_to_plot){
 #           cex.legend = 1,
 #           legend_digits = 0.6,
 #           zlim=c(0,1),
-#           outermargintext = c("Longitude (Â°E)","Latitude (Â°N)")
+#           outermargintext = c("Longitude (°E)","Latitude (°N)")
 # )
 
 
