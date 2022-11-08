@@ -13,8 +13,6 @@ library(readxl)
 
 #####################
 
-setwd("/nesi/nobackup/niwa03347/ACharsley/Model_comparisons")
-
 rm(list=ls())
 
 ## Set paths
