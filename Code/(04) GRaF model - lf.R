@@ -8,10 +8,12 @@
 
 #####################
 ## Packages
-library(GRaF) #install_github('GRaF', 'goldingn')
+library(GRaF) #install_github('goldingn/GRaF')
 library(readxl)
 
 #####################
+
+setwd("/nesi/nobackup/niwa03347/ACharsley/Model_comparisons")
 
 rm(list=ls())
 
@@ -27,9 +29,8 @@ dir.create(path, showWarnings = F)
 figs_path <- file.path(output_path, "Figures")
 dir.create(figs_path, showWarnings = F)
 
-# ## Load pre-developed functions
-# source(file.path(getwd(), "Code/Functions/funcs.R"))
-
+## Load pre-developed functions
+source(file.path(getwd(), "Code/Functions/funcs.R"))
 
 #species to model:
 species <- c("angdie", "angaus")[1]
@@ -41,10 +42,13 @@ print(species)
 load(file.path(data_path, "My_NZFFD.REC2.Diad.EF.Rdata"))
 
 #Load table with all covariates
-diad.preds <- read_xlsx(file.path(data_path, "Predictor table_edited.xlsx"))
-Xvars <- diad.preds$Abbreviation
+diad.preds <- read.csv(file.path(data_path, "Predictor_Table_final.csv"))
+Xvars <- diad.preds$Abbreviation[diad.preds$VIF_vars_to_keep == "Keep"]
 Xvars <- as.character(Xvars) #set as a character
-Xvars <- Xvars[!(Xvars=="REC1_rclabel")]
+# diad.preds <- read_xlsx(file.path(data_path, "Predictor table_edited.xlsx"))
+# Xvars <- diad.preds$Abbreviation
+# Xvars <- as.character(Xvars) #set as a character
+# Xvars <- Xvars[!(Xvars=="REC1_rclabel")]
 
 #covariates to use
 diad.gini = read.csv(file.path(RRF_path, "Gini_scores.csv")) #covariates selected by the RRF to use
@@ -53,12 +57,20 @@ diad.gini = read.csv(file.path(RRF_path, "Gini_scores.csv")) #covariates selecte
 ################################################################################################
 #Longfin eel Model
 Model_covs = as.vector(diad.gini[diad.gini[,species] > 0 , 1]) #the variables to include
-Model_covs <- c(Model_covs, "year") #use year as a covariate
 
 NZFFD.REC2.Diad.EF[[species]] <- as.factor(NZFFD.REC2.Diad.EF[[species]]) #specify the species as a factor
 levels(NZFFD.REC2.Diad.EF[[species]]) <- c("FALSE", "TRUE") #ensure the levels are F/T
 pa <- as.numeric(as.logical(NZFFD.REC2.Diad.EF[,species])) #pa data
 
+#Standardise covariates
+NZFFD.REC2.Diad.EF[,Model_covs] <- apply(NZFFD.REC2.Diad.EF[,Model_covs], 2, function(x){(x - mean(x))/sd(x)})
+
+Model_covs <- c(Model_covs, "year") #use year as a covariate
+
+#Run model
+graf_model <- graf(y=pa, x=NZFFD.REC2.Diad.EF[,Model_covs], opt.l = TRUE, prior = NULL,verbose = TRUE) #with uninformative prior
+
+saveRDS(graf_model, file.path(path, "GRaF_model.rds"))
 
 #if(!file.exists(file.path(path, "Graf_model.rds"))){
 #  
@@ -86,7 +98,7 @@ pa <- as.numeric(as.logical(NZFFD.REC2.Diad.EF[,species])) #pa data
 
   print("Plotting SDM maps") 
 
-graf_model <- readRDS(file.path(path, "GRaF_model.rds"))
+#graf_model <- readRDS(file.path(path, "GRaF_model.rds"))
   
   # load(file.path(data_path, "NZ_Coast_NZTM2.RData")) #Load NZ plotting data
   # load(file.path(data_path, "FINAL_REC2_FOR_PREDICTIONS.Rdata")) #load REC2
@@ -96,8 +108,11 @@ graf_model <- readRDS(file.path(path, "GRaF_model.rds"))
   REC2 = REC2[complete.cases(REC2),] #use the complete cases of the REC2
   REC2$year <- 2014 #assume year is most recent
   
-  preds <- predict(graf_model, newdata= REC2[, Model_covs]) #REC2 predictions
-
+  newdata <- REC2
+  
+  newdata[, Model_covs[!(Model_covs == "year")]]= apply(newdata[, Model_covs[!(Model_covs == "year")]], 2, function(x){(x - mean(x))/sd(x)})
+  
+  preds <- predict.graf_v2(graf_model, newdata= newdata[, Model_covs]) #REC2 predictions
   saveRDS(preds, file.path(path, "preds.rds"))
   #preds <- readRDS(file.path(path, "preds.rds"))
     
@@ -131,7 +146,7 @@ graf_model <- readRDS(file.path(path, "GRaF_model.rds"))
   
   jpeg(file.path(path, "Predictions_postermode.jpeg"), height=297/25.4, width=210/25.4,units="in", res=600) #map JPEG
   par(mfrow = c(1,1)) #set par
-  plot(Lat~Lon, data = NZ_Coast_NZTM2, type = "l", ylab = "Latitude (Â°N)", xlab = "Longitude (Â°E)", #axes = F, 
+  plot(Lat~Lon, data = NZ_Coast_NZTM2, type = "l", ylab = "Latitude (°N)", xlab = "Longitude (°E)", #axes = F, 
        main = "", cex.main = 1.5, font.main = 1) #REC2 plot
   for(myOrder in 1:8) { #loop to achieve differing cex my streamorder size
     myCex <- ifelse(myOrder > 3, 0.2, 0.1) #if streamorder is greater than 3 cex=0.2 else cex=0.1
@@ -153,7 +168,7 @@ graf_model <- readRDS(file.path(path, "GRaF_model.rds"))
   
   jpeg(file.path(path, "Predictions_lower95.jpeg"), height=297/25.4, width=210/25.4,units="in", res=600) #map JPEG
   par(mfrow = c(1,1)) #set par
-  plot(Lat~Lon, data = NZ_Coast_NZTM2, type = "l", ylab = "Latitude (Â°N)", xlab = "Longitude (Â°E)", #axes = F, 
+  plot(Lat~Lon, data = NZ_Coast_NZTM2, type = "l", ylab = "Latitude (°N)", xlab = "Longitude (°E)", #axes = F, 
        main = "", cex.main = 1.5, font.main = 1) #REC2 plot
   for(myOrder in 1:8) { #loop to achieve differing cex my streamorder size
     myCex <- ifelse(myOrder > 3, 0.2, 0.1) #if streamorder is greater than 3 cex=0.2 else cex=0.1
@@ -175,7 +190,7 @@ graf_model <- readRDS(file.path(path, "GRaF_model.rds"))
   
   jpeg(file.path(path, "Predictions_upper95.jpeg"), height=297/25.4, width=210/25.4,units="in", res=600) #map JPEG
   par(mfrow = c(1,1)) #set par
-  plot(Lat~Lon, data = NZ_Coast_NZTM2, type = "l", ylab = "Latitude (Â°N)", xlab = "Longitude (Â°E)", #axes = F, 
+  plot(Lat~Lon, data = NZ_Coast_NZTM2, type = "l", ylab = "Latitude (°N)", xlab = "Longitude (°E)", #axes = F, 
        main = "", cex.main = 1.5, font.main = 1) #REC2 plot
   for(myOrder in 1:8) { #loop to achieve differing cex my streamorder size
     myCex <- ifelse(myOrder > 3, 0.2, 0.1) #if streamorder is greater than 3 cex=0.2 else cex=0.1
