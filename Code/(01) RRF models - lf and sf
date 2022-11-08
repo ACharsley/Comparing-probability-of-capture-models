@@ -12,6 +12,7 @@ library(RRF) #RRF pacakage
 library(ROCR) #auc function
 library(cvAUC) #auc CI's
 library(sperrorest) #k-means spatial partitioning function
+library(readxl)
 
 
 rm(list=ls())
@@ -28,12 +29,22 @@ dir.create(RRF_path, showWarnings = F)
 load(file.path(data_path, "My_NZFFD.REC2.Diad.EF.Rdata"))
 
 #Covariate names
-diad.preds <- read_xlsx(file.path(data_path, "Predictor Table_edited.xlsx"))
-Xvars <- diad.preds$Abbreviation
+diad.preds <- read.csv(file.path(data_path, "Predictor_Table_final.csv"))
+Xvars <- diad.preds$Abbreviation[diad.preds$VIF_vars_to_keep == "Keep"]
 rm(diad.preds) #remove as we no longer need this
 Xvars <- as.character(Xvars) #set as a character
 
-Xvars <- Xvars[!(Xvars=="REC1_rclabel")]
+# Standardise covariates
+NZFFD.REC2.Diad.EF[,Xvars] <- apply(NZFFD.REC2.Diad.EF[,Xvars], 2, function(x){(x - mean(x))/sd(x)})
+
+
+
+# diad.preds <- read_xlsx(file.path(data_path, "Predictor Table_edited.xlsx"))
+# Xvars <- diad.preds$Abbreviation
+# rm(diad.preds) #remove as we no longer need this
+# Xvars <- as.character(Xvars) #set as a character
+# 
+# Xvars <- Xvars[!(Xvars=="REC1_rclabel")]
 
 #fishmeth isn't needed as a covariate as we are only using EF data
 
@@ -79,8 +90,10 @@ load(file.path(data_path, "NZ_Coast_NZTM2_latlon.RData")) #Load NZ plotting data
 load(file.path(data_path, "REC2_latlon.Rdata")) #load REC2
 REC2 = REC2[complete.cases(REC2),] #use the complete cases of the REC2
 
-angdie_pred <- predict(ModelListMMQ.RRF.angdie[[1]], type = "prob", newdata= REC2[, Xvars]) #longfin REC2 predictions
-angaus_pred <- predict(ModelListMMQ.RRF.angaus[[1]], type = "prob", newdata= REC2[, Xvars]) #shortfin REC2 predictions
+newdata= apply(REC2[, Xvars], 2, function(x){(x - mean(x))/sd(x)})
+
+angdie_pred <- predict(ModelListMMQ.RRF.angdie[[1]], type = "prob", newdata= newdata) #longfin REC2 predictions
+angaus_pred <- predict(ModelListMMQ.RRF.angaus[[1]], type = "prob", newdata= newdata) #shortfin REC2 predictions
 
 
 ########
@@ -116,7 +129,7 @@ myColours_angaus = mycols(50)[Col_Bin_angaus] #the particular colours to use for
 ################################### Longfin eel #############################################
 jpeg(file.path(RRF_path, "Angdie_FishMap_EF.jpeg"), height=297/25.4, width=210/25.4,units="in", res=600) #map JPEG
 par(mfrow = c(1,1)) #set par
-plot(Lat~Lon, data = NZ_Coast_NZTM2, type = "l", ylab = "Latitude (Â°N)", xlab = "Longitude (Â°E)", #axes = F, 
+plot(Lat~Lon, data = NZ_Coast_NZTM2, type = "l", ylab = "Latitude (°N)", xlab = "Longitude (°E)", #axes = F, 
      main = "", cex.main = 1.5, font.main = 1) #longfin REC2 plot
 for(myOrder in 1:8) { #loop to achieve differing cex my streamorder size
   myCex <- ifelse(myOrder > 3, 0.2, 0.1) #if streamorder is greater than 3 cex=0.2 else cex=0.1
@@ -135,7 +148,7 @@ dev.off()
 
 # jpeg(file.path(RRF_path, "Angdie_FishMap_EF_2.jpeg"), height=297/25.4, width=210/25.4,units="in", res=600) #map JPEG
 # par(mfrow = c(1,1)) #set par
-# plot(Lat~Lon, data = NZ_Coast_NZTM2, type = "l", ylab = "Latitude (Â°N)", xlab = "", #axes = F, 
+# plot(Lat~Lon, data = NZ_Coast_NZTM2, type = "l", ylab = "Latitude (°N)", xlab = "", #axes = F, 
 #      main = "", cex.main = 1.5, font.main = 1) #longfin REC2 plot
 # for(myOrder in 1:8) { #loop to achieve differing cex my streamorder size
 #   myCex <- ifelse(myOrder > 3, 0.2, 0.1) #if streamorder is greater than 3 cex=0.2 else cex=0.1
@@ -156,7 +169,7 @@ dev.off()
 ################################### Shortfin eel #############################################
 jpeg(file.path(RRF_path, "Angaus_FishMap_EF.jpeg"), height=297/25.4, width=210/25.4,units="in", res=600) #map JPEG
 par(mfrow = c(1,1)) #set par
-plot(Lat~Lon, data = NZ_Coast_NZTM2, type = "l", ylab = "Latitude (Â°N)", xlab = "Longitude (Â°E)", #axes = F, 
+plot(Lat~Lon, data = NZ_Coast_NZTM2, type = "l", ylab = "Latitude (°N)", xlab = "Longitude (°E)", #axes = F, 
      main = "", cex.main = 1.5, font.main = 1) #shortfin REC2 plot
 for(myOrder in 1:8) { #loop to achieve differing cex my streamorder size
   myCex <- ifelse(myOrder > 3, 0.2, 0.1) #if streamorder is greater than 3 cex=0.2 else cex=0.1
@@ -174,7 +187,7 @@ dev.off()
 
 # jpeg(file.path(RRF_path, "Angaus_FishMap_EF_2.jpeg"), height=297/25.4, width=210/25.4,units="in", res=600) #map JPEG
 # par(mfrow = c(1,1)) #set par
-# plot(Lat~Lon, data = NZ_Coast_NZTM2, type = "l", ylab = "Latitude (Â°N)", xlab = "", #axes = F, 
+# plot(Lat~Lon, data = NZ_Coast_NZTM2, type = "l", ylab = "Latitude (°N)", xlab = "", #axes = F, 
 #      main = "", cex.main = 1.5, font.main = 1) #shortfin REC2 plot
 # for(myOrder in 1:8) { #loop to achieve differing cex my streamorder size
 #   myCex <- ifelse(myOrder > 3, 0.2, 0.1) #if streamorder is greater than 3 cex=0.2 else cex=0.1
