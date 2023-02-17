@@ -95,14 +95,6 @@ newdata= apply(REC2[, Xvars], 2, function(x){(x - mean(x))/sd(x)})
 angdie_pred <- predict(ModelListMMQ.RRF.angdie[[1]], type = "prob", newdata= newdata) #longfin REC2 predictions
 angaus_pred <- predict(ModelListMMQ.RRF.angaus[[1]], type = "prob", newdata= newdata) #shortfin REC2 predictions
 
-
-########
-#Residual plots
-
-##
-
-
-
 ########
 #Spatial plots
 
